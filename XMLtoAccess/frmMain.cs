@@ -11,13 +11,13 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using ADOX;
-//using ADODB;
+using ADODB;
 
 namespace XMLtoAccess
 {
     public partial class frmMain : Form
     {
-        string dbName, pathToDb;
+        string dbName, pathToDb, connString;
         List<String> tableListH = new List<string>();
         List<String> tableListL = new List<string>();
         Dictionary<string, List<string>> addFieldsH = new Dictionary<string, List<string>>();
@@ -58,28 +58,15 @@ namespace XMLtoAccess
             bool isres = false;
 
             ADOX.Catalog cat = new ADOX.Catalog();
-            //ADOX.Table table = new ADOX.Table();
-
-            ////Create the table and it's fields. 
-            //table.Name = "Table1";
-            //table.Columns.Append("Field1");
-            //table.Columns.Append("Field2");
-
             try
             {
                 dbName = getDBName();
-                string pathToDb = txtPathToDB.Text + $@"{dbName}";
-                string connString = $@"Provider=Microsoft.Jet.OLEDB.4.0; Data Source={pathToDb}; Jet OLEDB:Engine Type=5";
-                //cat.Create("Provider=Microsoft.Jet.OLEDB.4.0;" + @"Data Source=D:\data\text.mdb" + "; Jet OLEDB:Engine Type=5");
+                pathToDb = txtPathToDB.Text + $@"{dbName}";
+                connString = $@"Provider=Microsoft.Jet.OLEDB.4.0; Data Source={pathToDb}; Jet OLEDB:Engine Type=5";
                 cat.Create(connString);
-                
-                //cat.Tables.Append(table);
 
-                //OleDbConnection con = new OleDbConnection();
                 OleDbConnection con = cat.ActiveConnection as OleDbConnection;
 
-                //Now Close the database
-                //ADODB.Connection con = cat.ActiveConnection as ADODB.Connection;
                 if (con != null)
                     con.Close();
 
@@ -87,6 +74,7 @@ namespace XMLtoAccess
             }
             catch (Exception ex)
             {
+                MessageBox.Show(ex.Message);
                 isres = false;
             }
             cat = null;
@@ -217,13 +205,14 @@ namespace XMLtoAccess
         private bool readXMLFiles()
         {
             bool isres = false;
+            string strMsg = "";
             try
             {
                 DirectoryInfo dir = new DirectoryInfo($@"{Path.GetDirectoryName(txtPathToArc.Text)}\unarc");
                 FileInfo[] files = dir.GetFiles();
                 if (files.Length == 0)
                 {
-                    string strMsg = "Файлы для обработки отсутствуют";
+                    strMsg = "Файлы для обработки отсутствуют";
                     MessageBox.Show(strMsg);
                     txtLog.AppendLine(strMsg);
                     return isres;
@@ -234,12 +223,17 @@ namespace XMLtoAccess
                     txtLog.AppendLine($"Обрабатывается файл {fi.Name}");
                     if (!ImportFilesToDatabase(fi))
                     {
-                        string strMsg = $"Ошибка импорта файла {fi.Name}";
+                        strMsg = $"Ошибка импорта файла {fi.Name}";
                         MessageBox.Show(strMsg);
                         txtLog.AppendLine(strMsg);
                         return isres;
                     }
                 }
+
+                strMsg = "Обработка файла закончена";
+                txtLog.AppendLine(strMsg);
+                MessageBox.Show(strMsg);
+
                 isres = false;
             }
             catch(Exception ex)
@@ -252,8 +246,10 @@ namespace XMLtoAccess
         {
             bool result = false;
             string strMes = "";
+
             try
             {
+
                 List<string> ignoretables = new List<string>() { "DS2", "DS3" };
 
                 DataSet ds = new DataSet();
@@ -268,7 +264,7 @@ namespace XMLtoAccess
                     return result;
                 }
 
-                string fileName = ds.Tables["ZGLV"].Rows[0]["ZGLV"].ToString();
+                string fileName = ds.Tables["ZGLV"].Rows[0]["FILENAME"].ToString();
                 if (fileName.StartsWith("H"))
                 {
                     result = hFile(ds);
@@ -299,28 +295,192 @@ namespace XMLtoAccess
         private bool hFile(DataSet ds)
         {
             bool result = false;
+            string strMes = "";
+            OleDbConnection conn;
+            ADODB.Connection adodbCon = new ADODB.Connection();
+            adodbCon.ConnectionString = connString;
+            ADOX.Catalog cat = new ADOX.Catalog();
+            ADOX.Table tab;
+            string fieldName, valueName, insCommand;
+            OleDbCommand cmd;
             try
             {
+                adodbCon.Open();
+                cat.ActiveConnection = adodbCon;
+                conn = new OleDbConnection(connString);
 
+                conn.Open();
+                if (conn.State != ConnectionState.Open)
+                {
+                    strMes = "Отсутствует соединение к БД";
+                    MessageBox.Show(strMes);
+                    txtLog.AppendLine(strMes);
+                    return result;
+                }
+                
+                foreach (string tabName in tableListH)
+                {
+                    fieldName = "";
+                    valueName = "";
+                    insCommand = "";
+                    if (!ds.Tables.Contains(tabName))
+                    {
+                        strMes = $"Отсутствует таблица {tabName}";
+                        MessageBox.Show(strMes);
+                        txtLog.AppendLine(strMes);
+                        continue;
+                    }
+
+                    DataTable schemaTable = conn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables,new object[] { null, null, tabName, "TABLE" });
+                    if (schemaTable.Rows.Count>0)
+                    {
+                        if (tabName == "ZGLAV")
+                        {
+
+                        }
+                        continue;
+                    }
+
+                    string[] columnNames = ds.Tables[tabName]
+                        .Columns.Cast<DataColumn>()
+                        .Select(x => x.ColumnName)
+                        .ToArray();
+
+                    tab = new ADOX.Table();
+                    tab.Name = $"{tabName}rokb";
+                    //id
+                    fieldName += "id,";
+                    ADOX.Column column = new ADOX.Column();
+                    column.Name = "id";
+                    column.Type = ADOX.DataTypeEnum.adInteger;
+                    column.ParentCatalog = cat;
+                    column.Properties["AutoIncrement"].Value = true;
+                    tab.Columns.Append(column);
+
+                    foreach(string str in addFieldsH[tabName])
+                    {
+                        fieldName += $"{str},";
+                        valueName += $"@{str},";
+                        tab.Columns.Append(str, ADOX.DataTypeEnum.adVarWChar, 255);
+                    }
+                    foreach(string str in columnNames)
+                    {
+                        fieldName += $"{str},";
+                        valueName += $"@{str},";
+                        tab.Columns.Append(str, ADOX.DataTypeEnum.adVarWChar, 255);
+                    }
+                    cat.Tables.Append(tab);
+                    fieldName = fieldName.TrimEnd(',');
+                    valueName = valueName.TrimEnd(',');
+                    insCommand = $"insert into {tabName}({fieldName}) values({valueName})";
+                    //
+                    cmd = new OleDbCommand(insCommand, conn);
+                    cmd.Parameters.Clear();
+                    foreach (DataRow dr in ds.Tables[tabName].Rows)
+                    {
+
+                    }
+                }
+                conn.Close();
             }
             catch(Exception ex)
             {
                 MessageBox.Show(ex.Message);
             }
+            cat = null;
             return result;
         }
 
         private bool lFile(DataSet ds)
         {
             bool result = false;
+            string strMes = "";
+            OleDbConnection conn;
+            ADODB.Connection adodbCon = new ADODB.Connection();
+            adodbCon.ConnectionString = connString;
+            ADOX.Catalog cat = new ADOX.Catalog();
+            ADOX.Table tab;
+            string fieldName, valueName, insCommand;
             try
             {
+                adodbCon.Open();
+                cat.ActiveConnection = adodbCon;
+                conn = new OleDbConnection(connString);
 
+                conn.Open();
+                if (conn.State != ConnectionState.Open)
+                {
+                    strMes = "Отсутствует соединение к БД";
+                    MessageBox.Show(strMes);
+                    txtLog.AppendLine(strMes);
+                    return result;
+                }
+
+                foreach (string tabName in tableListL)
+                {
+                    fieldName = "";
+                    valueName = "";
+                    insCommand = "";
+                    if (!ds.Tables.Contains(tabName))
+                    {
+                        strMes = $"Отсутствует таблица {tabName}";
+                        MessageBox.Show(strMes);
+                        txtLog.AppendLine(strMes);
+                        continue;
+                    }
+
+                    DataTable schemaTable = conn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, new object[] { null, null, tabName, "TABLE" });
+                    if (schemaTable.Rows.Count > 0)
+                    {
+                        if (tabName == "ZGLAV")
+                        {
+
+                        }
+                        continue;
+                    }
+
+                    string[] columnNames = ds.Tables[tabName]
+                        .Columns.Cast<DataColumn>()
+                        .Select(x => x.ColumnName)
+                        .ToArray();
+
+                    tab = new ADOX.Table();
+                    tab.Name = $"{tabName}rokb";
+                    //id
+                    fieldName += "id,";
+                    ADOX.Column column = new ADOX.Column();
+                    column.Name = "id";
+                    column.Type = ADOX.DataTypeEnum.adInteger;
+                    column.ParentCatalog = cat;
+                    column.Properties["AutoIncrement"].Value = true;
+                    tab.Columns.Append(column);
+
+                    if (!addFieldsL.ContainsKey(tabName)) { continue; }
+
+                    foreach (string str in addFieldsL[tabName])
+                    {
+                        fieldName += $"{str},";
+                        valueName += $"@{str},";
+                        tab.Columns.Append(str, ADOX.DataTypeEnum.adVarWChar, 255);
+                    }
+                    foreach (string str in columnNames)
+                    {
+                        fieldName += $"{str},";
+                        valueName += $"@{str},";
+                        tab.Columns.Append(str, ADOX.DataTypeEnum.adVarWChar, 255);
+                    }
+                    cat.Tables.Append(tab);
+                    fieldName = fieldName.TrimEnd(',');
+                    valueName = valueName.TrimEnd(',');
+                    insCommand = $"insert into {tabName}({fieldName}) values({valueName})";
+                }
+                conn.Close();
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message);
             }
+            cat = null;
             return result;
         }
 
