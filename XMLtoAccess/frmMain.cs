@@ -10,8 +10,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Threading.Tasks;
+using System.Diagnostics;
 using ADOX;
 using ADODB;
+using DAO;
 
 namespace XMLtoAccess
 {
@@ -22,7 +25,7 @@ namespace XMLtoAccess
         List<String> tableListL = new List<string>();
         Dictionary<string, List<string>> addFieldsH = new Dictionary<string, List<string>>();
         Dictionary<string, List<string>> addFieldsL = new Dictionary<string, List<string>>();
-
+        Dictionary<string, OleDbCommand> commands = new Dictionary<string, OleDbCommand>();
         public frmMain()
         {
             InitializeComponent();
@@ -47,7 +50,7 @@ namespace XMLtoAccess
             addFieldsH.Add("B_DIAG", new List<string>(new string[] { "IDCASE" }));
             addFieldsH.Add("B_PROT", new List<string>(new string[] { }));
             addFieldsH.Add("ONK_USL", new List<string>(new string[] { "IDCASE" }));
-            addFieldsH.Add("LEK_PR", new List<string>(new string[] { "IDCASE","USL_TIP" }));
+            addFieldsH.Add("LEK_PR", new List<string>(new string[] { "IDCASE","USL_TIP","DATE_INJ" }));
             addFieldsH.Add("USL", new List<string>(new string[] { "N_ZAP", "IDCASE","PLAT"}));
             addFieldsH.Add("SL_KOEF", new List<string>(new string[] {"IDCASE" }));
 
@@ -331,15 +334,15 @@ namespace XMLtoAccess
                         continue;
                     }
 
-                    DataTable schemaTable = conn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables,new object[] { null, null, tabName, "TABLE" });
-                    if (schemaTable.Rows.Count>0)
-                    {
-                        if (tabName == "ZGLAV")
-                        {
+                    //DataTable schemaTable = conn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables,new object[] { null, null, $"{tabName}rokb", "TABLE" });
+                    //if (schemaTable.Rows.Count>0)
+                    //{
+                    //    if (tabName == "ZGLV")
+                    //    {
 
-                        }
-                        continue;
-                    }
+                    //    }
+                    //    continue;
+                    //}
 
                     string[] columnNames = ds.Tables[tabName]
                         .Columns.Cast<DataColumn>()
@@ -349,7 +352,7 @@ namespace XMLtoAccess
                     tab = new ADOX.Table();
                     tab.Name = $"{tabName}rokb";
                     //id
-                    fieldName += "id,";
+                    fieldName += "";
                     ADOX.Column column = new ADOX.Column();
                     column.Name = "id";
                     column.Type = ADOX.DataTypeEnum.adInteger;
@@ -359,29 +362,198 @@ namespace XMLtoAccess
 
                     foreach(string str in addFieldsH[tabName])
                     {
-                        fieldName += $"{str},";
+                        fieldName += $"[{str}],";
                         valueName += $"@{str},";
-                        tab.Columns.Append(str, ADOX.DataTypeEnum.adVarWChar, 255);
+                        
+                        tab.Columns.Append(defCol(str));
                     }
                     foreach(string str in columnNames)
                     {
-                        fieldName += $"{str},";
+                        fieldName += $"[{str}],";
                         valueName += $"@{str},";
-                        tab.Columns.Append(str, ADOX.DataTypeEnum.adVarWChar, 255);
+                        tab.Columns.Append(defCol(str));
                     }
                     cat.Tables.Append(tab);
                     fieldName = fieldName.TrimEnd(',');
                     valueName = valueName.TrimEnd(',');
-                    insCommand = $"insert into {tabName}({fieldName}) values({valueName})";
+                    insCommand = $"insert into [{tabName}rokb]({fieldName}) values({valueName})";
                     //
                     cmd = new OleDbCommand(insCommand, conn);
-                    cmd.Parameters.Clear();
-                    foreach (DataRow dr in ds.Tables[tabName].Rows)
-                    {
-
-                    }
+                    commands[tabName] = cmd;
+                    //cmd.Parameters.Clear();
                 }
+
                 conn.Close();
+
+                //insDataH(ds, conn);
+
+                //conn.Open();
+                //using (OleDbTransaction trans = conn.BeginTransaction())
+                //{
+                //    string _CODE = "", _PLAT = "61", _NSCHET = "", _N_ZAP = "", _IDCASE = "", _USL_TIP = "2", _DATE_INJ = "";
+                //    OleDbCommand cOleDbCommand = new OleDbCommand();
+
+                //    cOleDbCommand = commands["ZGLV"];
+                //    cOleDbCommand.Transaction = trans;
+                //    //System.Threading.Thread.Sleep(60000);
+
+                //    //DataTable schemaTable2 = conn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, new object[] { null, null, $"ZGLVrokb", "TABLE" });
+                //    //if (schemaTable2.Rows.Count > 0)
+                //    //{
+                //    //    int z = 0;
+                //    //}
+
+                //    foreach (DataRow dr in ds.Tables["ZGLV"].Rows)
+                //    {
+                //        cOleDbCommand.Parameters.AddWithValue("H", "H");
+                //        foreach (DataColumn dc in ds.Tables["ZGLV"].Columns)
+                //        {
+                //            cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, dr[dc.ColumnName].ToString());
+                //        }
+                //        cOleDbCommand.ExecuteNonQuery();
+                //    }
+
+                //    //
+                //    //SCHET
+                //    //
+                //    cOleDbCommand = commands["SCHET"];
+                //    cOleDbCommand.Transaction = trans;
+                //    DataRow drSchet = ds.Tables["SCHET"].Rows[0];
+                //    _CODE = drSchet["CODE"].ToString();
+                //    _NSCHET = drSchet["NSCHET"].ToString();
+                //    foreach (DataColumn dc in ds.Tables["SCHET"].Columns)
+                //    {
+                //        cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, drSchet[dc.ColumnName].ToString());
+                //    }
+                //    cOleDbCommand.ExecuteNonQuery();
+
+                //    //
+                //    //ZAP
+                //    //
+                //    cOleDbCommand = commands["ZAP"];
+                //    cOleDbCommand.Transaction = trans;
+                //    foreach (DataRow dr in ds.Tables["ZAP"].Rows)
+                //    {
+                //        _N_ZAP = dr["N_ZAP"].ToString();
+                //        string ZAP_Id = dr["ZAP_Id"].ToString();
+                //        cOleDbCommand.Parameters.AddWithValue("CODE", _CODE);
+                //        cOleDbCommand.Parameters.AddWithValue("PLAT", _PLAT);
+                //        cOleDbCommand.Parameters.AddWithValue("NSCHET", _NSCHET);
+                //        foreach (DataColumn dc in ds.Tables["ZAP"].Columns)
+                //        {
+                //            cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, dr[dc.ColumnName].ToString());
+                //        }
+                //        cOleDbCommand.ExecuteNonQuery();
+                //    }
+                //    trans.Commit();
+                //}
+
+                //conn.Close();
+
+                DAO.DBEngine dbEngine = new DAO.DBEngine();
+                Boolean CheckFl = false;
+
+                try
+                {
+                    DataTable dtOutData = ds.Tables["ZAP"];
+                    DAO.Database db = dbEngine.OpenDatabase(pathToDb);
+                    DAO.Recordset AccesssRecordset = db.OpenRecordset("ZAProkb");
+                    DAO.Field[] AccesssFields = new DAO.Field[dtOutData.Columns.Count];
+
+                    //Loop on each row of dtOutData
+                    for (Int32 rowCounter = 0; rowCounter < dtOutData.Rows.Count; rowCounter++)
+                    {
+                        AccesssRecordset.AddNew();
+                        //Loop on column
+                        for (Int32 colCounter = 0; colCounter < dtOutData.Columns.Count; colCounter++)
+                        {
+                            // for the first time... setup the field name.
+                            if (!CheckFl)
+                                AccesssFields[colCounter] = AccesssRecordset.Fields[dtOutData.Columns[colCounter].ColumnName];
+                            AccesssFields[colCounter].Value = dtOutData.Rows[rowCounter][colCounter];
+                        }
+
+                        AccesssRecordset.Update();
+                        CheckFl = true;
+                    }
+
+                    AccesssRecordset.Close();
+                    db.Close();
+                }
+                finally
+                {
+                    System.Runtime.InteropServices.Marshal.ReleaseComObject(dbEngine);
+                    dbEngine = null;
+                }
+
+                //conn.Open();
+
+                //string _CODE = "", _PLAT = "61", _NSCHET = "", _N_ZAP = "", _IDCASE = "", _USL_TIP = "2", _DATE_INJ = "";
+                //OleDbCommand cOleDbCommand = new OleDbCommand();
+
+                //cOleDbCommand = commands["ZGLV"];
+                ////cOleDbCommand.Transaction = trans;
+
+                //foreach (DataRow dr in ds.Tables["ZGLV"].Rows)
+                //{
+                //    cOleDbCommand.Parameters.AddWithValue("H", "H");
+                //    foreach (DataColumn dc in ds.Tables["ZGLV"].Columns)
+                //    {
+                //        cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, dr[dc.ColumnName].ToString());
+                //    }
+                //    cOleDbCommand.ExecuteNonQuery();
+                //}
+
+                ////
+                ////SCHET
+                ////
+                //cOleDbCommand = commands["SCHET"];
+                ////cOleDbCommand.Transaction = trans;
+                //DataRow drSchet = ds.Tables["SCHET"].Rows[0];
+                //_CODE = drSchet["CODE"].ToString();
+                //_NSCHET = drSchet["NSCHET"].ToString();
+                //foreach (DataColumn dc in ds.Tables["SCHET"].Columns)
+                //{
+                //    cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, drSchet[dc.ColumnName].ToString());
+                //}
+                //cOleDbCommand.ExecuteNonQuery();
+
+                ////
+                ////ZAP
+                ////
+                //cOleDbCommand = commands["ZAP"];
+                ////cOleDbCommand.Transaction = trans;
+                //cOleDbCommand.CommandText = "insert into ZAProkb(CODE) values (@CODE)";
+                //txtLog.AppendLine($"{DateTime.Now} начало");
+                //for (int index = 0; index < 6000; index++)
+                //{
+                //    if (index % 500 == 0)
+                //    {
+                //        conn.Close();
+                //        txtLog.AppendLine($"{DateTime.Now} - {index}");
+                //        conn.Open();
+                //    }
+                //    cOleDbCommand.Parameters.AddWithValue("CODE", index.ToString());
+                //    cOleDbCommand.ExecuteNonQuery();
+                //}
+                ////foreach (DataRow dr in ds.Tables["ZAP"].Rows)
+                ////{
+                ////    _N_ZAP = dr["N_ZAP"].ToString();
+                ////    string ZAP_Id = dr["ZAP_Id"].ToString();
+                ////    cOleDbCommand.Parameters.AddWithValue("CODE", _CODE);
+                ////    cOleDbCommand.Parameters.AddWithValue("PLAT", _PLAT);
+                ////    cOleDbCommand.Parameters.AddWithValue("NSCHET", _NSCHET);
+                ////    foreach (DataColumn dc in ds.Tables["ZAP"].Columns)
+                ////    {
+                ////        cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, dr[dc.ColumnName].ToString());
+                ////    }
+                ////    await cOleDbCommand.ExecuteNonQueryAsync();
+                ////}
+
+                //txtLog.AppendLine($"{DateTime.Now} окончание");
+                
+                //conn.Close();
+
             }
             catch(Exception ex)
             {
@@ -484,5 +656,101 @@ namespace XMLtoAccess
             return result;
         }
 
+
+        private async void insDataH(DataSet ds, OleDbConnection conn)
+        {
+            try
+            {
+                Stopwatch sw = new Stopwatch();
+                sw.Start();
+                //OleDbConnection conn = new OleDbConnection(connString);
+                await Task.Run(async () =>
+                {
+                    conn.Open();
+                    using (OleDbTransaction trans = conn.BeginTransaction())
+                    {
+                        string _CODE = "", _PLAT = "61", _NSCHET = "", _N_ZAP = "", _IDCASE = "", _USL_TIP = "2", _DATE_INJ = "";
+                        OleDbCommand cOleDbCommand = new OleDbCommand();
+
+                        cOleDbCommand = commands["ZGLV"];
+                        cOleDbCommand.Transaction = trans;
+
+                        foreach (DataRow dr in ds.Tables["ZGLV"].Rows)
+                        {
+                            cOleDbCommand.Parameters.AddWithValue("H", "H");
+                            foreach (DataColumn dc in ds.Tables["ZGLV"].Columns)
+                            {
+                                cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, dr[dc.ColumnName].ToString());
+                            }
+                            await cOleDbCommand.ExecuteNonQueryAsync();
+                        }
+
+                        //
+                        //SCHET
+                        //
+                        cOleDbCommand = commands["SCHET"];
+                        cOleDbCommand.Transaction = trans;
+                        DataRow drSchet = ds.Tables["SCHET"].Rows[0];
+                        _CODE = drSchet["CODE"].ToString();
+                        _NSCHET = drSchet["NSCHET"].ToString();
+                        foreach (DataColumn dc in ds.Tables["SCHET"].Columns)
+                        {
+                            cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, drSchet[dc.ColumnName].ToString());
+                        }
+                        await cOleDbCommand.ExecuteNonQueryAsync();
+
+                        //
+                        //ZAP
+                        //
+                        cOleDbCommand = commands["ZAP"];
+                        cOleDbCommand.Transaction = trans;
+                        cOleDbCommand.CommandText = "insert into ZAProkb(CODE) values (@CODE)";
+                        txtLog.AppendLine($"{DateTime.Now} начало");
+                        for (int index = 0; index < 6000; index++)
+                        {
+                            if (index % 500 == 0)
+                            {
+                                txtLog.AppendLine($"{DateTime.Now} - {index}");
+                            }
+                            cOleDbCommand.Parameters.AddWithValue("CODE", index.ToString());
+                            await cOleDbCommand.ExecuteNonQueryAsync();
+                        }
+                        //foreach (DataRow dr in ds.Tables["ZAP"].Rows)
+                        //{
+                        //    _N_ZAP = dr["N_ZAP"].ToString();
+                        //    string ZAP_Id = dr["ZAP_Id"].ToString();
+                        //    cOleDbCommand.Parameters.AddWithValue("CODE", _CODE);
+                        //    cOleDbCommand.Parameters.AddWithValue("PLAT", _PLAT);
+                        //    cOleDbCommand.Parameters.AddWithValue("NSCHET", _NSCHET);
+                        //    foreach (DataColumn dc in ds.Tables["ZAP"].Columns)
+                        //    {
+                        //        cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, dr[dc.ColumnName].ToString());
+                        //    }
+                        //    await cOleDbCommand.ExecuteNonQueryAsync();
+                        //}
+                        trans.Commit();
+                        txtLog.AppendLine($"{DateTime.Now} окончание");
+                    }
+
+                    conn.Close();
+                });
+                sw.Stop();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+            
+        }
+
+        private ADOX.Column defCol(string colName)
+        {
+            ADOX.Column col = new ADOX.Column();
+            col.Name = colName;
+            col.Type = ADOX.DataTypeEnum.adVarWChar;
+            col.Attributes = ADOX.ColumnAttributesEnum.adColNullable;
+            col.DefinedSize = 255;
+            return col;
+        }
     }
 }
