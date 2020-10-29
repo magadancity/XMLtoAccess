@@ -36,9 +36,9 @@ namespace XMLtoAccess
         {
             tableListH =new List<string>(new string[]{ "ZGLV","SCHET","ZAP","PACIENT","SLUCH","HMP","NAPR_FROM","CONS",
                 "ONK_SL","B_DIAG","B_PROT","ONK_USL","LEK_PR","USL","SL_KOEF"});
-            tableListL = new List<string>(new string[] { "ZGLV","PERS"});
+            tableListL = new List<string>(new string[] { "PERS"});
 
-            addFieldsH.Add("ZGLV", new List<string>(new string[] { "H"}));
+            addFieldsH.Add("ZGLV", new List<string>(new string[] { "H","FILENAME1"}));
             addFieldsH.Add("SCHET", new List<string>(new string[] { }));
             addFieldsH.Add("ZAP", new List<string>(new string[] { "CODE","PLAT","NSCHET" }));
             addFieldsH.Add("PACIENT", new List<string>(new string[] { "N_ZAP","PLAT" }));
@@ -211,6 +211,7 @@ namespace XMLtoAccess
             string strMsg = "";
             try
             {
+                txtLog.AppendLine(DateTime.Now.ToString());
                 DirectoryInfo dir = new DirectoryInfo($@"{Path.GetDirectoryName(txtPathToArc.Text)}\unarc");
                 FileInfo[] files = dir.GetFiles();
                 if (files.Length == 0)
@@ -235,6 +236,7 @@ namespace XMLtoAccess
 
                 strMsg = "Обработка файла закончена";
                 txtLog.AppendLine(strMsg);
+                txtLog.AppendLine(DateTime.Now.ToString());
                 MessageBox.Show(strMsg);
 
                 isres = false;
@@ -252,8 +254,6 @@ namespace XMLtoAccess
 
             try
             {
-
-                List<string> ignoretables = new List<string>() { "DS2", "DS3" };
 
                 DataSet ds = new DataSet();
                 
@@ -283,11 +283,6 @@ namespace XMLtoAccess
                     txtLog.AppendLine(strMes);
                     return result;
                 }
-                //if (!AddColumnsToTables()) { return result; }
-
-                //if (!CheckTables()) { return result; }
-
-                //if (!InsertData()) { return result; }
 
                 result = true;
             }
@@ -304,8 +299,8 @@ namespace XMLtoAccess
             adodbCon.ConnectionString = connString;
             ADOX.Catalog cat = new ADOX.Catalog();
             ADOX.Table tab;
-            string fieldName, valueName, insCommand;
-            OleDbCommand cmd;
+            int SLUCH_ID = 0;
+            DAO.DBEngine dbEngine = new DAO.DBEngine();
             try
             {
                 adodbCon.Open();
@@ -320,12 +315,12 @@ namespace XMLtoAccess
                     txtLog.AppendLine(strMes);
                     return result;
                 }
+
+                txtLog.AppendLine("Создание структуры БД");
+                Application.DoEvents();
                 
                 foreach (string tabName in tableListH)
                 {
-                    fieldName = "";
-                    valueName = "";
-                    insCommand = "";
                     if (!ds.Tables.Contains(tabName))
                     {
                         strMes = $"Отсутствует таблица {tabName}";
@@ -333,16 +328,6 @@ namespace XMLtoAccess
                         txtLog.AppendLine(strMes);
                         continue;
                     }
-
-                    //DataTable schemaTable = conn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables,new object[] { null, null, $"{tabName}rokb", "TABLE" });
-                    //if (schemaTable.Rows.Count>0)
-                    //{
-                    //    if (tabName == "ZGLV")
-                    //    {
-
-                    //    }
-                    //    continue;
-                    //}
 
                     string[] columnNames = ds.Tables[tabName]
                         .Columns.Cast<DataColumn>()
@@ -352,7 +337,6 @@ namespace XMLtoAccess
                     tab = new ADOX.Table();
                     tab.Name = $"{tabName}rokb";
                     //id
-                    fieldName += "";
                     ADOX.Column column = new ADOX.Column();
                     column.Name = "id";
                     column.Type = ADOX.DataTypeEnum.adInteger;
@@ -362,203 +346,326 @@ namespace XMLtoAccess
 
                     foreach(string str in addFieldsH[tabName])
                     {
-                        fieldName += $"[{str}],";
-                        valueName += $"@{str},";
-                        
                         tab.Columns.Append(defCol(str));
                     }
                     foreach(string str in columnNames)
                     {
-                        fieldName += $"[{str}],";
-                        valueName += $"@{str},";
                         tab.Columns.Append(defCol(str));
                     }
                     cat.Tables.Append(tab);
-                    fieldName = fieldName.TrimEnd(',');
-                    valueName = valueName.TrimEnd(',');
-                    insCommand = $"insert into [{tabName}rokb]({fieldName}) values({valueName})";
-                    //
-                    cmd = new OleDbCommand(insCommand, conn);
-                    commands[tabName] = cmd;
-                    //cmd.Parameters.Clear();
                 }
 
                 conn.Close();
 
-                //insDataH(ds, conn);
-
-                //conn.Open();
-                //using (OleDbTransaction trans = conn.BeginTransaction())
-                //{
-                //    string _CODE = "", _PLAT = "61", _NSCHET = "", _N_ZAP = "", _IDCASE = "", _USL_TIP = "2", _DATE_INJ = "";
-                //    OleDbCommand cOleDbCommand = new OleDbCommand();
-
-                //    cOleDbCommand = commands["ZGLV"];
-                //    cOleDbCommand.Transaction = trans;
-                //    //System.Threading.Thread.Sleep(60000);
-
-                //    //DataTable schemaTable2 = conn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, new object[] { null, null, $"ZGLVrokb", "TABLE" });
-                //    //if (schemaTable2.Rows.Count > 0)
-                //    //{
-                //    //    int z = 0;
-                //    //}
-
-                //    foreach (DataRow dr in ds.Tables["ZGLV"].Rows)
-                //    {
-                //        cOleDbCommand.Parameters.AddWithValue("H", "H");
-                //        foreach (DataColumn dc in ds.Tables["ZGLV"].Columns)
-                //        {
-                //            cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, dr[dc.ColumnName].ToString());
-                //        }
-                //        cOleDbCommand.ExecuteNonQuery();
-                //    }
-
-                //    //
-                //    //SCHET
-                //    //
-                //    cOleDbCommand = commands["SCHET"];
-                //    cOleDbCommand.Transaction = trans;
-                //    DataRow drSchet = ds.Tables["SCHET"].Rows[0];
-                //    _CODE = drSchet["CODE"].ToString();
-                //    _NSCHET = drSchet["NSCHET"].ToString();
-                //    foreach (DataColumn dc in ds.Tables["SCHET"].Columns)
-                //    {
-                //        cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, drSchet[dc.ColumnName].ToString());
-                //    }
-                //    cOleDbCommand.ExecuteNonQuery();
-
-                //    //
-                //    //ZAP
-                //    //
-                //    cOleDbCommand = commands["ZAP"];
-                //    cOleDbCommand.Transaction = trans;
-                //    foreach (DataRow dr in ds.Tables["ZAP"].Rows)
-                //    {
-                //        _N_ZAP = dr["N_ZAP"].ToString();
-                //        string ZAP_Id = dr["ZAP_Id"].ToString();
-                //        cOleDbCommand.Parameters.AddWithValue("CODE", _CODE);
-                //        cOleDbCommand.Parameters.AddWithValue("PLAT", _PLAT);
-                //        cOleDbCommand.Parameters.AddWithValue("NSCHET", _NSCHET);
-                //        foreach (DataColumn dc in ds.Tables["ZAP"].Columns)
-                //        {
-                //            cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, dr[dc.ColumnName].ToString());
-                //        }
-                //        cOleDbCommand.ExecuteNonQuery();
-                //    }
-                //    trans.Commit();
-                //}
-
-                //conn.Close();
-
-                DAO.DBEngine dbEngine = new DAO.DBEngine();
-                Boolean CheckFl = false;
-
-                try
+                txtLog.AppendLine("Внесение данных");
+                Application.DoEvents();
+                //внесение данных
+                string _CODE = "", _PLAT = "61", _NSCHET = "", _N_ZAP = "", _IDCASE = "", _USL_TIP = "2";
+                txtLog.AppendLine("Таблица ZGLV");
+                Application.DoEvents();
+                DAO.Database db = dbEngine.OpenDatabase(pathToDb);
+                DAO.Recordset rs = db.OpenRecordset("ZGLVrokb");
+                foreach (DataRow dr in ds.Tables["ZGLV"].Rows)
                 {
-                    DataTable dtOutData = ds.Tables["ZAP"];
-                    DAO.Database db = dbEngine.OpenDatabase(pathToDb);
-                    DAO.Recordset AccesssRecordset = db.OpenRecordset("ZAProkb");
-                    DAO.Field[] AccesssFields = new DAO.Field[dtOutData.Columns.Count];
-
-                    //Loop on each row of dtOutData
-                    for (Int32 rowCounter = 0; rowCounter < dtOutData.Rows.Count; rowCounter++)
+                    rs.AddNew();
+                    rs.Fields["H"].Value = "H";
+                    foreach (DataColumn dc in ds.Tables["ZGLV"].Columns)
                     {
-                        AccesssRecordset.AddNew();
-                        //Loop on column
-                        for (Int32 colCounter = 0; colCounter < dtOutData.Columns.Count; colCounter++)
-                        {
-                            // for the first time... setup the field name.
-                            if (!CheckFl)
-                                AccesssFields[colCounter] = AccesssRecordset.Fields[dtOutData.Columns[colCounter].ColumnName];
-                            AccesssFields[colCounter].Value = dtOutData.Rows[rowCounter][colCounter];
-                        }
-
-                        AccesssRecordset.Update();
-                        CheckFl = true;
+                        rs.Fields[dc.ColumnName].Value=dr[dc.ColumnName].ToString();
                     }
-
-                    AccesssRecordset.Close();
-                    db.Close();
+                    rs.Update();
                 }
-                finally
+                rs.Close();
+                //
+                //SCHET
+                //
+                txtLog.AppendLine("Таблица SCHET");
+                Application.DoEvents();
+                rs = db.OpenRecordset("SCHETrokb");
+                DataRow drSchet = ds.Tables["SCHET"].Rows[0];
+                _CODE = drSchet["CODE"].ToString();
+                _NSCHET = drSchet["NSCHET"].ToString();
+                rs.AddNew();
+                foreach (DataColumn dc in ds.Tables["SCHET"].Columns)
                 {
-                    System.Runtime.InteropServices.Marshal.ReleaseComObject(dbEngine);
-                    dbEngine = null;
+                    rs.Fields[dc.ColumnName].Value=drSchet[dc.ColumnName].ToString();
                 }
+                rs.Update();
+                rs.Close();
+                //
+                //ZAP
+                //
+                txtLog.AppendLine("Таблица ZAP");
+                Application.DoEvents();
+                pb.Minimum = 0;
+                pb.Maximum = ds.Tables["ZAP"].Rows.Count;
+                pb.Value = 0;
+                int counter = 0;
+                rs = db.OpenRecordset("ZAProkb");
+                foreach (DataRow dr in ds.Tables["ZAP"].Rows)
+                {
+                    pb.Value = counter++;
+                    Application.DoEvents();
+                    rs.AddNew();
+                    _N_ZAP = dr["N_ZAP"].ToString();
+                    int ZAP_Id = int.Parse(dr["ZAP_Id"].ToString());
+                    rs.Fields["CODE"].Value = _CODE;
+                    rs.Fields["PLAT"].Value = _PLAT;
+                    rs.Fields["NSCHET"].Value = _NSCHET;
+                    foreach (DataColumn dc in ds.Tables["ZAP"].Columns)
+                    {
+                        rs.Fields[dc.ColumnName].Value = dr[dc.ColumnName].ToString();
+                    }
+                    rs.Update();
+                    //
+                    //PACIENT
+                    //
+                    DAO.Recordset rsPacient = db.OpenRecordset("PACIENTrokb");
+                    List<DataRow> pacList = ds.Tables["PACIENT"].AsEnumerable().Where(m => m.Field<Int32>("ZAP_Id") == ZAP_Id).ToList<DataRow>();
+                    foreach (DataRow drPac in pacList)
+                    {
+                        rsPacient.AddNew();
+                        rsPacient.Fields["N_ZAP"].Value = _N_ZAP;
+                        rsPacient.Fields["PLAT"].Value = _PLAT;
+                        foreach (DataColumn dc in ds.Tables["PACIENT"].Columns)
+                        {
+                            rsPacient.Fields[dc.ColumnName].Value = drPac[dc.Ordinal].ToString();
+                        }
+                        rsPacient.Update();
+                    }
+                    rsPacient.Close();
+                    //
+                    //SLUCH
+                    //
+                    DAO.Recordset rsSLUCH = db.OpenRecordset("SLUCHrokb");
+                    List<DataRow> sluchList = ds.Tables["SLUCH"].AsEnumerable().Where(m => m.Field<Int32>("ZAP_Id") == ZAP_Id).ToList<DataRow>();
+                    foreach (DataRow drSluch in sluchList)
+                    {
+                        _IDCASE = drSluch[ds.Tables["SLUCH"].Columns["IDCASE"].Ordinal].ToString();
+                        SLUCH_ID = int.Parse(drSluch["SLUCH_Id"].ToString());
+                        if (SLUCH_ID == 1098)
+                        {
+                            int zz = 0;
+                        }
+                        int SLUCH_Id = int.Parse(drSluch[ds.Tables["SLUCH"].Columns["SLUCH_Id"].Ordinal].ToString());
+                        rsSLUCH.AddNew();
+                        rsSLUCH.Fields["N_ZAP"].Value = _N_ZAP;
+                        rsSLUCH.Fields["PLAT"].Value = _PLAT;
+                        foreach (DataColumn dc in ds.Tables["SLUCH"].Columns)
+                        {
+                            rsSLUCH.Fields[dc.ColumnName].Value = drSluch[dc.Ordinal].ToString();
+                        }
+                        rsSLUCH.Update();
+                        //
+                        //HMP
+                        //
+                        DAO.Recordset rsHMP = db.OpenRecordset("HMProkb");
+                        List<DataRow> hmpList = ds.Tables["HMP"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
+                        if (hmpList != null && hmpList.Count > 0)
+                        {
+                            foreach (DataRow drHMP in hmpList)
+                            {
+                                rsHMP.AddNew();
+                                rsHMP.Fields["IDCASE"].Value = _IDCASE;
+                                foreach (DataColumn dc in ds.Tables["HMP"].Columns)
+                                {
+                                    rsHMP.Fields[dc.ColumnName].Value = drHMP[dc.Ordinal].ToString();
+                                }
+                                rsHMP.Update();
+                            }
+                        }
+                        rsHMP.Close();
+                        //
+                        //NAPR_FROM
+                        //
+                        DAO.Recordset rsNaprFrom = db.OpenRecordset("NAPR_FROMrokb");
+                        List<DataRow> naprFromList = ds.Tables["NAPR_FROM"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
+                        if (naprFromList != null && naprFromList.Count > 0)
+                        {
+                            foreach (DataRow drNaprFrom in naprFromList)
+                            {
+                                rsNaprFrom.AddNew();
+                                rsNaprFrom.Fields["IDCASE"].Value = _IDCASE;
+                                foreach (DataColumn dc in ds.Tables["NAPR_FROM"].Columns)
+                                {
+                                    rsNaprFrom.Fields[dc.ColumnName].Value = drNaprFrom[dc.Ordinal].ToString();
+                                }
+                                rsNaprFrom.Update();
+                            }
+                        }
+                        rsNaprFrom.Close();
+                        //
+                        //CONS
+                        //
+                        DAO.Recordset rsCons = db.OpenRecordset("CONSrokb");
+                        List<DataRow> consList = ds.Tables["CONS"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
+                        if (consList != null && consList.Count > 0)
+                        {
+                            foreach (DataRow drCons in consList)
+                            {
+                                rsCons.AddNew();
+                                rsCons.Fields["IDCASE"].Value = _IDCASE;
+                                foreach (DataColumn dc in ds.Tables["CONS"].Columns)
+                                {
+                                    rsCons.Fields[dc.ColumnName].Value = drCons[dc.Ordinal].ToString();
+                                }
+                                rsCons.Update();
+                            }
+                        }
+                        rsCons.Close();
+                        //
+                        //ONK_SL
+                        //
+                        DAO.Recordset rsOnkSl = db.OpenRecordset("ONK_SLrokb");
+                        List<DataRow> onkSlList = ds.Tables["ONK_SL"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
+                        if (onkSlList != null && onkSlList.Count > 0)
+                        {
+                            foreach (DataRow drOnkSl in onkSlList)
+                            {
+                                int OnkSl_Id = int.Parse(drOnkSl[ds.Tables["ONK_SL"].Columns["ONK_SL_Id"].Ordinal].ToString());
+                                rsOnkSl.AddNew();
+                                rsOnkSl.Fields["IDCASE"].Value = _IDCASE;
+                                foreach (DataColumn dc in ds.Tables["ONK_SL"].Columns)
+                                {
+                                    rsOnkSl.Fields[dc.ColumnName].Value = drOnkSl[dc.Ordinal].ToString();
+                                }
+                                rsOnkSl.Update();
+                                //
+                                //B_DIAG
+                                //
+                                DAO.Recordset rsBDiag = db.OpenRecordset("B_DIAGrokb");
+                                List<DataRow> bDiagList = ds.Tables["B_DIAG"].AsEnumerable().Where(m => m.Field<Int32>("ONK_SL_Id") == OnkSl_Id).ToList<DataRow>();
+                                if (bDiagList != null && bDiagList.Count > 0)
+                                {
+                                    foreach (DataRow drBDiag in bDiagList)
+                                    {
+                                        rsBDiag.AddNew();
+                                        rsBDiag.Fields["IDCASE"].Value = _IDCASE;
+                                        foreach (DataColumn dc in ds.Tables["B_DIAG"].Columns)
+                                        {
+                                            rsBDiag.Fields[dc.ColumnName].Value = drBDiag[dc.Ordinal].ToString();
+                                        }
+                                        rsBDiag.Update();
+                                    }
+                                }
+                                rsBDiag.Close();
+                                //
+                                //ONK_USL
+                                //
+                                DAO.Recordset rsOnkUsl = db.OpenRecordset("ONK_USLrokb");
+                                List<DataRow> onkUslList = ds.Tables["ONK_USL"].AsEnumerable().Where(m => m.Field<Int32>("ONK_SL_Id") == OnkSl_Id).ToList<DataRow>();
+                                if (onkUslList != null && onkUslList.Count > 0)
+                                {
+                                    foreach (DataRow drOnkUsl in onkUslList)
+                                    {
+                                        rsOnkUsl.AddNew();
+                                        rsOnkUsl.Fields["IDCASE"].Value = _IDCASE;
+                                        int ONK_USL_Id = int.Parse(drOnkUsl["ONK_USL_Id"].ToString());
+                                        foreach (DataColumn dc in ds.Tables["ONK_USL"].Columns)
+                                        {
+                                            rsOnkUsl.Fields[dc.ColumnName].Value = drOnkUsl[dc.Ordinal].ToString();
+                                        }
+                                        rsOnkUsl.Update();
+                                        //
+                                        //LEK_PR
+                                        //
+                                        DAO.Recordset rsLekPr = db.OpenRecordset("LEK_PRrokb");
+                                        List<DataRow> lekPrList = ds.Tables["LEK_PR"].AsEnumerable().Where(m => m.Field<Int32>("ONK_USL_Id") == ONK_USL_Id).ToList<DataRow>();
+                                        if (lekPrList != null && lekPrList.Count > 0)
+                                        {
+                                            foreach (DataRow drLekPr in lekPrList)
+                                            {
+                                                int LEK_PR_Id = int.Parse(drLekPr["LEK_PR_Id"].ToString());
+                                                List<DataRow> dateInjList = ds.Tables["DATE_INJ"].AsEnumerable().Where(m => m.Field<Int32>("LEK_PR_Id") == LEK_PR_Id).ToList<DataRow>();
+                                                if (dateInjList != null && dateInjList.Count > 0)
+                                                {
+                                                    foreach (DataRow drDateInj in dateInjList)
+                                                    {
+                                                        rsLekPr.AddNew();
+                                                        foreach (DataColumn dc in ds.Tables["LEK_PR"].Columns)
+                                                        {
+                                                            rsLekPr.Fields[dc.ColumnName].Value = drLekPr[dc.Ordinal].ToString();
+                                                        }
+                                                        rsLekPr.Fields["IDCASE"].Value = _IDCASE;
+                                                        rsLekPr.Fields["USL_TIP"].Value = "2";
+                                                        rsLekPr.Fields["DATE_INJ"].Value = drDateInj["DATE_INJ_Text"].ToString();
+                                                        rsLekPr.Update();
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    rsLekPr.AddNew();
+                                                    rsLekPr.Fields["IDCASE"].Value = _IDCASE;
+                                                    rsLekPr.Fields["USL_TIP"].Value = "2";
+                                                    rsLekPr.Update();
+                                                }
+                                            }
+                                        }
+                                        rsLekPr.Close();
+                                    }
+                                }
+                                rsOnkUsl.Close();
+                            }
+                        }
+                        rsOnkSl.Close();
+                        //
+                        //USL
+                        //
+                        DAO.Recordset rsUSL = db.OpenRecordset("USLrokb");
+                        List<DataRow> uslList = ds.Tables["USL"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
+                        if (uslList != null && uslList.Count > 0)
+                        {
+                            foreach (DataRow drUSL in uslList)
+                            {
+                                int USL_Id = int.Parse(drUSL["USL_Id"].ToString());
+                                rsUSL.AddNew();
+                                rsUSL.Fields["IDCASE"].Value = _IDCASE;
+                                rsUSL.Fields["N_ZAP"].Value = _N_ZAP;
+                                rsUSL.Fields["PLAT"].Value = _PLAT;
+                                foreach (DataColumn dc in ds.Tables["USL"].Columns)
+                                {
+                                    rsUSL.Fields[dc.ColumnName].Value = drUSL[dc.Ordinal].ToString();
+                                }
+                                rsUSL.Update();
+                                //
+                                //SL_KOEF
+                                //
+                                DAO.Recordset rsSlKoef = db.OpenRecordset("SL_KOEFrokb");
+                                List<DataRow> slKoefList = ds.Tables["SL_KOEF"].AsEnumerable().Where(m => m.Field<Int32>("USL_Id") == USL_Id).ToList<DataRow>();
+                                if (slKoefList != null && slKoefList.Count > 0)
+                                {
+                                    foreach (DataRow drSlKoef in slKoefList)
+                                    {
+                                        rsSlKoef.AddNew();
+                                        rsSlKoef.Fields["IDCASE"].Value = _IDCASE;
+                                        foreach (DataColumn dc in ds.Tables["SL_KOEF"].Columns)
+                                        {
+                                            rsSlKoef.Fields[dc.ColumnName].Value = drSlKoef[dc.Ordinal].ToString();
+                                        }
+                                        rsSlKoef.Update();
+                                    }
+                                }
+                                rsSlKoef.Close();
+                            }
+                        }
+                        rsUSL.Close();
+                    }
+                    rsSLUCH.Close();
 
-                //conn.Open();
-
-                //string _CODE = "", _PLAT = "61", _NSCHET = "", _N_ZAP = "", _IDCASE = "", _USL_TIP = "2", _DATE_INJ = "";
-                //OleDbCommand cOleDbCommand = new OleDbCommand();
-
-                //cOleDbCommand = commands["ZGLV"];
-                ////cOleDbCommand.Transaction = trans;
-
-                //foreach (DataRow dr in ds.Tables["ZGLV"].Rows)
-                //{
-                //    cOleDbCommand.Parameters.AddWithValue("H", "H");
-                //    foreach (DataColumn dc in ds.Tables["ZGLV"].Columns)
-                //    {
-                //        cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, dr[dc.ColumnName].ToString());
-                //    }
-                //    cOleDbCommand.ExecuteNonQuery();
-                //}
-
-                ////
-                ////SCHET
-                ////
-                //cOleDbCommand = commands["SCHET"];
-                ////cOleDbCommand.Transaction = trans;
-                //DataRow drSchet = ds.Tables["SCHET"].Rows[0];
-                //_CODE = drSchet["CODE"].ToString();
-                //_NSCHET = drSchet["NSCHET"].ToString();
-                //foreach (DataColumn dc in ds.Tables["SCHET"].Columns)
-                //{
-                //    cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, drSchet[dc.ColumnName].ToString());
-                //}
-                //cOleDbCommand.ExecuteNonQuery();
-
-                ////
-                ////ZAP
-                ////
-                //cOleDbCommand = commands["ZAP"];
-                ////cOleDbCommand.Transaction = trans;
-                //cOleDbCommand.CommandText = "insert into ZAProkb(CODE) values (@CODE)";
-                //txtLog.AppendLine($"{DateTime.Now} начало");
-                //for (int index = 0; index < 6000; index++)
-                //{
-                //    if (index % 500 == 0)
-                //    {
-                //        conn.Close();
-                //        txtLog.AppendLine($"{DateTime.Now} - {index}");
-                //        conn.Open();
-                //    }
-                //    cOleDbCommand.Parameters.AddWithValue("CODE", index.ToString());
-                //    cOleDbCommand.ExecuteNonQuery();
-                //}
-                ////foreach (DataRow dr in ds.Tables["ZAP"].Rows)
-                ////{
-                ////    _N_ZAP = dr["N_ZAP"].ToString();
-                ////    string ZAP_Id = dr["ZAP_Id"].ToString();
-                ////    cOleDbCommand.Parameters.AddWithValue("CODE", _CODE);
-                ////    cOleDbCommand.Parameters.AddWithValue("PLAT", _PLAT);
-                ////    cOleDbCommand.Parameters.AddWithValue("NSCHET", _NSCHET);
-                ////    foreach (DataColumn dc in ds.Tables["ZAP"].Columns)
-                ////    {
-                ////        cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, dr[dc.ColumnName].ToString());
-                ////    }
-                ////    await cOleDbCommand.ExecuteNonQueryAsync();
-                ////}
-
-                //txtLog.AppendLine($"{DateTime.Now} окончание");
-                
-                //conn.Close();
+                }
+                rs.Close();
 
             }
             catch(Exception ex)
             {
                 MessageBox.Show(ex.Message);
             }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(dbEngine);
+                dbEngine = null;
+            }
+
             cat = null;
             return result;
         }
@@ -572,7 +679,8 @@ namespace XMLtoAccess
             adodbCon.ConnectionString = connString;
             ADOX.Catalog cat = new ADOX.Catalog();
             ADOX.Table tab;
-            string fieldName, valueName, insCommand;
+            DAO.DBEngine dbEngine = new DAO.DBEngine();
+            
             try
             {
                 adodbCon.Open();
@@ -587,27 +695,15 @@ namespace XMLtoAccess
                     txtLog.AppendLine(strMes);
                     return result;
                 }
-
+                txtLog.AppendLine("Создание структуры БД");
+                Application.DoEvents();
                 foreach (string tabName in tableListL)
                 {
-                    fieldName = "";
-                    valueName = "";
-                    insCommand = "";
                     if (!ds.Tables.Contains(tabName))
                     {
                         strMes = $"Отсутствует таблица {tabName}";
                         MessageBox.Show(strMes);
                         txtLog.AppendLine(strMes);
-                        continue;
-                    }
-
-                    DataTable schemaTable = conn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, new object[] { null, null, tabName, "TABLE" });
-                    if (schemaTable.Rows.Count > 0)
-                    {
-                        if (tabName == "ZGLAV")
-                        {
-
-                        }
                         continue;
                     }
 
@@ -619,7 +715,6 @@ namespace XMLtoAccess
                     tab = new ADOX.Table();
                     tab.Name = $"{tabName}rokb";
                     //id
-                    fieldName += "id,";
                     ADOX.Column column = new ADOX.Column();
                     column.Name = "id";
                     column.Type = ADOX.DataTypeEnum.adInteger;
@@ -627,120 +722,74 @@ namespace XMLtoAccess
                     column.Properties["AutoIncrement"].Value = true;
                     tab.Columns.Append(column);
 
-                    if (!addFieldsL.ContainsKey(tabName)) { continue; }
-
                     foreach (string str in addFieldsL[tabName])
                     {
-                        fieldName += $"{str},";
-                        valueName += $"@{str},";
-                        tab.Columns.Append(str, ADOX.DataTypeEnum.adVarWChar, 255);
+                        tab.Columns.Append(defCol(str));
                     }
                     foreach (string str in columnNames)
                     {
-                        fieldName += $"{str},";
-                        valueName += $"@{str},";
-                        tab.Columns.Append(str, ADOX.DataTypeEnum.adVarWChar, 255);
+                        tab.Columns.Append(defCol(str));
                     }
                     cat.Tables.Append(tab);
-                    fieldName = fieldName.TrimEnd(',');
-                    valueName = valueName.TrimEnd(',');
-                    insCommand = $"insert into {tabName}({fieldName}) values({valueName})";
                 }
+
                 conn.Close();
+
+
+                //внесение данных
+                string _PLAT = "61";
+                txtLog.AppendLine("Внесение данных");
+                Application.DoEvents();
+                DAO.Database db = dbEngine.OpenDatabase(pathToDb);
+                DAO.Recordset rs = db.OpenRecordset("ZGLVrokb");
+                foreach (DataRow dr in ds.Tables["ZGLV"].Rows)
+                {
+                    rs.AddNew();
+                    rs.Fields["H"].Value = "L";
+                    foreach (DataColumn dc in ds.Tables["ZGLV"].Columns)
+                    {
+                        rs.Fields[dc.ColumnName].Value = dr[dc.ColumnName].ToString();
+                    }
+                    rs.Update();
+                }
+                rs.Close();
+                //
+                //PERS
+                //
+                txtLog.AppendLine("Таблица PERS");
+                Application.DoEvents();
+                System.Threading.Thread.Sleep(10000);
+                pb.Minimum = 0;
+                pb.Maximum = ds.Tables["PERS"].Rows.Count;
+                pb.Value = 0;
+                Application.DoEvents();
+                rs = db.OpenRecordset("PERSrokb");
+                int counter = 0;
+                foreach (DataRow drSchet in ds.Tables["PERS"].Rows)
+                {
+                    pb.Value = counter++;
+                    Application.DoEvents();
+                    rs.AddNew();
+                    rs.Fields["PLAT"].Value = _PLAT;
+                    foreach (DataColumn dc in ds.Tables["PERS"].Columns)
+                    {
+                        rs.Fields[dc.ColumnName].Value = drSchet[dc.ColumnName].ToString();
+                    }
+                    rs.Update();
+                }
+                rs.Close();
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message);
+            }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(dbEngine);
+                dbEngine = null;
             }
             cat = null;
             return result;
-        }
-
-
-        private async void insDataH(DataSet ds, OleDbConnection conn)
-        {
-            try
-            {
-                Stopwatch sw = new Stopwatch();
-                sw.Start();
-                //OleDbConnection conn = new OleDbConnection(connString);
-                await Task.Run(async () =>
-                {
-                    conn.Open();
-                    using (OleDbTransaction trans = conn.BeginTransaction())
-                    {
-                        string _CODE = "", _PLAT = "61", _NSCHET = "", _N_ZAP = "", _IDCASE = "", _USL_TIP = "2", _DATE_INJ = "";
-                        OleDbCommand cOleDbCommand = new OleDbCommand();
-
-                        cOleDbCommand = commands["ZGLV"];
-                        cOleDbCommand.Transaction = trans;
-
-                        foreach (DataRow dr in ds.Tables["ZGLV"].Rows)
-                        {
-                            cOleDbCommand.Parameters.AddWithValue("H", "H");
-                            foreach (DataColumn dc in ds.Tables["ZGLV"].Columns)
-                            {
-                                cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, dr[dc.ColumnName].ToString());
-                            }
-                            await cOleDbCommand.ExecuteNonQueryAsync();
-                        }
-
-                        //
-                        //SCHET
-                        //
-                        cOleDbCommand = commands["SCHET"];
-                        cOleDbCommand.Transaction = trans;
-                        DataRow drSchet = ds.Tables["SCHET"].Rows[0];
-                        _CODE = drSchet["CODE"].ToString();
-                        _NSCHET = drSchet["NSCHET"].ToString();
-                        foreach (DataColumn dc in ds.Tables["SCHET"].Columns)
-                        {
-                            cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, drSchet[dc.ColumnName].ToString());
-                        }
-                        await cOleDbCommand.ExecuteNonQueryAsync();
-
-                        //
-                        //ZAP
-                        //
-                        cOleDbCommand = commands["ZAP"];
-                        cOleDbCommand.Transaction = trans;
-                        cOleDbCommand.CommandText = "insert into ZAProkb(CODE) values (@CODE)";
-                        txtLog.AppendLine($"{DateTime.Now} начало");
-                        for (int index = 0; index < 6000; index++)
-                        {
-                            if (index % 500 == 0)
-                            {
-                                txtLog.AppendLine($"{DateTime.Now} - {index}");
-                            }
-                            cOleDbCommand.Parameters.AddWithValue("CODE", index.ToString());
-                            await cOleDbCommand.ExecuteNonQueryAsync();
-                        }
-                        //foreach (DataRow dr in ds.Tables["ZAP"].Rows)
-                        //{
-                        //    _N_ZAP = dr["N_ZAP"].ToString();
-                        //    string ZAP_Id = dr["ZAP_Id"].ToString();
-                        //    cOleDbCommand.Parameters.AddWithValue("CODE", _CODE);
-                        //    cOleDbCommand.Parameters.AddWithValue("PLAT", _PLAT);
-                        //    cOleDbCommand.Parameters.AddWithValue("NSCHET", _NSCHET);
-                        //    foreach (DataColumn dc in ds.Tables["ZAP"].Columns)
-                        //    {
-                        //        cOleDbCommand.Parameters.AddWithValue(dc.ColumnName, dr[dc.ColumnName].ToString());
-                        //    }
-                        //    await cOleDbCommand.ExecuteNonQueryAsync();
-                        //}
-                        trans.Commit();
-                        txtLog.AppendLine($"{DateTime.Now} окончание");
-                    }
-
-                    conn.Close();
-                });
-                sw.Stop();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(ex.Message);
-            }
-            
         }
 
         private ADOX.Column defCol(string colName)
