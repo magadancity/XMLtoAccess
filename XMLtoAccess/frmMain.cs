@@ -10,7 +10,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Threading.Tasks;
+//using System.Threading.Tasks;
 using System.Diagnostics;
 using ADOX;
 using ADODB;
@@ -26,6 +26,7 @@ namespace XMLtoAccess
         Dictionary<string, List<string>> addFieldsH = new Dictionary<string, List<string>>();
         Dictionary<string, List<string>> addFieldsL = new Dictionary<string, List<string>>();
         Dictionary<string, OleDbCommand> commands = new Dictionary<string, OleDbCommand>();
+        string _PLAT;
         public frmMain()
         {
             InitializeComponent();
@@ -247,6 +248,7 @@ namespace XMLtoAccess
             }
             return isres;
         }
+
         public bool ImportFilesToDatabase(FileInfo fi)
         {
             bool result = false;
@@ -254,7 +256,12 @@ namespace XMLtoAccess
 
             try
             {
-
+                int indxUnder = fi.Name.IndexOf('_');
+                int indxType = 0;
+                if (fi.Name.Contains("S")) { indxType = fi.Name.IndexOf('S'); }
+                else if (fi.Name.Contains("T")) { indxType = fi.Name.IndexOf('S'); }
+                else { txtLog.AppendLine($"Не известный тип файла {fi.Name}"); return result; }
+                _PLAT=
                 DataSet ds = new DataSet();
                 
                 ds.ReadXml(fi.FullName);
@@ -360,7 +367,7 @@ namespace XMLtoAccess
                 txtLog.AppendLine("Внесение данных");
                 Application.DoEvents();
                 //внесение данных
-                string _CODE = "", _PLAT = "61", _NSCHET = "", _N_ZAP = "", _IDCASE = "", _USL_TIP = "2";
+                string _CODE = "", _NSCHET = "", _N_ZAP = "", _IDCASE = "", _USL_TIP = "2";
                 txtLog.AppendLine("Таблица ZGLV");
                 Application.DoEvents();
                 DAO.Database db = dbEngine.OpenDatabase(pathToDb);
@@ -683,6 +690,7 @@ namespace XMLtoAccess
             
             try
             {
+
                 adodbCon.Open();
                 cat.ActiveConnection = adodbCon;
                 conn = new OleDbConnection(connString);
