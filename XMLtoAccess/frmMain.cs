@@ -371,7 +371,7 @@ namespace XMLtoAccess
                 foreach (string tabName in tableListL)
                 {
                     tab = new ADOX.Table();
-                    tab.Name = $"{tabName}rokb";
+                    tab.Name = $"{tabName}{postFix}";
                     //id
                     ADOX.Column column = new ADOX.Column();
                     column.Name = "id";
@@ -817,6 +817,7 @@ namespace XMLtoAccess
             catch(Exception ex)
             {
                 MessageBox.Show(ex.Message);
+                txtLog.AppendLine(ex.Message);
             }
             finally
             {
@@ -891,6 +892,7 @@ namespace XMLtoAccess
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message);
+                txtLog.AppendLine(ex.Message);
             }
             finally
             {
