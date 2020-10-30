@@ -38,11 +38,15 @@
             this.txtPathToArc = new System.Windows.Forms.TextBox();
             this.lblSelectPathToXML = new System.Windows.Forms.Label();
             this.pnlBottom = new System.Windows.Forms.Panel();
-            this.btnRun = new System.Windows.Forms.Button();
             this.pb = new System.Windows.Forms.ProgressBar();
+            this.btnRun = new System.Windows.Forms.Button();
+            this.rbTypeFrom = new System.Windows.Forms.RadioButton();
+            this.gbType = new System.Windows.Forms.GroupBox();
+            this.rbTypeTo = new System.Windows.Forms.RadioButton();
             this.pnlFill.SuspendLayout();
             this.pnlElem.SuspendLayout();
             this.pnlBottom.SuspendLayout();
+            this.gbType.SuspendLayout();
             this.SuspendLayout();
             // 
             // pnlFill
@@ -52,11 +56,12 @@
             this.pnlFill.Dock = System.Windows.Forms.DockStyle.Fill;
             this.pnlFill.Location = new System.Drawing.Point(0, 0);
             this.pnlFill.Name = "pnlFill";
-            this.pnlFill.Size = new System.Drawing.Size(702, 349);
+            this.pnlFill.Size = new System.Drawing.Size(702, 530);
             this.pnlFill.TabIndex = 0;
             // 
             // pnlElem
             // 
+            this.pnlElem.Controls.Add(this.gbType);
             this.pnlElem.Controls.Add(this.txtLog);
             this.pnlElem.Controls.Add(this.btnSelectPathToDb);
             this.pnlElem.Controls.Add(this.txtPathToDB);
@@ -67,7 +72,7 @@
             this.pnlElem.Dock = System.Windows.Forms.DockStyle.Fill;
             this.pnlElem.Location = new System.Drawing.Point(0, 0);
             this.pnlElem.Name = "pnlElem";
-            this.pnlElem.Size = new System.Drawing.Size(702, 293);
+            this.pnlElem.Size = new System.Drawing.Size(702, 474);
             this.pnlElem.TabIndex = 3;
             // 
             // txtLog
@@ -75,10 +80,11 @@
             this.txtLog.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.txtLog.Location = new System.Drawing.Point(15, 92);
+            this.txtLog.Location = new System.Drawing.Point(15, 167);
             this.txtLog.Multiline = true;
             this.txtLog.Name = "txtLog";
-            this.txtLog.Size = new System.Drawing.Size(675, 195);
+            this.txtLog.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
+            this.txtLog.Size = new System.Drawing.Size(675, 301);
             this.txtLog.TabIndex = 6;
             // 
             // btnSelectPathToDb
@@ -152,13 +158,23 @@
             this.pnlBottom.Controls.Add(this.pb);
             this.pnlBottom.Controls.Add(this.btnRun);
             this.pnlBottom.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.pnlBottom.Location = new System.Drawing.Point(0, 293);
+            this.pnlBottom.Location = new System.Drawing.Point(0, 474);
             this.pnlBottom.Name = "pnlBottom";
             this.pnlBottom.Size = new System.Drawing.Size(702, 56);
             this.pnlBottom.TabIndex = 2;
             // 
+            // pb
+            // 
+            this.pb.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.pb.Location = new System.Drawing.Point(15, 6);
+            this.pb.Name = "pb";
+            this.pb.Size = new System.Drawing.Size(544, 23);
+            this.pb.TabIndex = 1;
+            // 
             // btnRun
             // 
+            this.btnRun.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnRun.Location = new System.Drawing.Point(565, 6);
             this.btnRun.Name = "btnRun";
             this.btnRun.Size = new System.Drawing.Size(125, 38);
@@ -167,18 +183,47 @@
             this.btnRun.UseVisualStyleBackColor = true;
             this.btnRun.Click += new System.EventHandler(this.btnRun_Click);
             // 
-            // pb
+            // rbTypeFrom
             // 
-            this.pb.Location = new System.Drawing.Point(15, 6);
-            this.pb.Name = "pb";
-            this.pb.Size = new System.Drawing.Size(459, 23);
-            this.pb.TabIndex = 1;
+            this.rbTypeFrom.AutoSize = true;
+            this.rbTypeFrom.Location = new System.Drawing.Point(138, 19);
+            this.rbTypeFrom.Name = "rbTypeFrom";
+            this.rbTypeFrom.Size = new System.Drawing.Size(84, 17);
+            this.rbTypeFrom.TabIndex = 7;
+            this.rbTypeFrom.Text = "Из ТФОМС";
+            this.rbTypeFrom.UseVisualStyleBackColor = true;
+            // 
+            // gbType
+            // 
+            this.gbType.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.gbType.Controls.Add(this.rbTypeTo);
+            this.gbType.Controls.Add(this.rbTypeFrom);
+            this.gbType.Location = new System.Drawing.Point(15, 92);
+            this.gbType.Name = "gbType";
+            this.gbType.Size = new System.Drawing.Size(675, 49);
+            this.gbType.TabIndex = 8;
+            this.gbType.TabStop = false;
+            this.gbType.Text = "Тип БД";
+            // 
+            // rbTypeTo
+            // 
+            this.rbTypeTo.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.rbTypeTo.AutoSize = true;
+            this.rbTypeTo.Checked = true;
+            this.rbTypeTo.Location = new System.Drawing.Point(512, 19);
+            this.rbTypeTo.Name = "rbTypeTo";
+            this.rbTypeTo.Size = new System.Drawing.Size(77, 17);
+            this.rbTypeTo.TabIndex = 8;
+            this.rbTypeTo.TabStop = true;
+            this.rbTypeTo.Text = "В ТФОМС";
+            this.rbTypeTo.UseVisualStyleBackColor = true;
             // 
             // frmMain
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(702, 349);
+            this.ClientSize = new System.Drawing.Size(702, 530);
             this.Controls.Add(this.pnlFill);
             this.Name = "frmMain";
             this.Text = "Создание БД";
@@ -186,6 +231,8 @@
             this.pnlElem.ResumeLayout(false);
             this.pnlElem.PerformLayout();
             this.pnlBottom.ResumeLayout(false);
+            this.gbType.ResumeLayout(false);
+            this.gbType.PerformLayout();
             this.ResumeLayout(false);
 
         }
@@ -204,6 +251,9 @@
         private System.Windows.Forms.Button btnRun;
         private System.Windows.Forms.TextBox txtLog;
         private System.Windows.Forms.ProgressBar pb;
+        private System.Windows.Forms.GroupBox gbType;
+        private System.Windows.Forms.RadioButton rbTypeTo;
+        private System.Windows.Forms.RadioButton rbTypeFrom;
     }
 }
 

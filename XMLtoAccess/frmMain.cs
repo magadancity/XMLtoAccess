@@ -27,6 +27,8 @@ namespace XMLtoAccess
         Dictionary<string, List<string>> addFieldsL = new Dictionary<string, List<string>>();
         Dictionary<string, OleDbCommand> commands = new Dictionary<string, OleDbCommand>();
         string _PLAT;
+        //bool isHStructCreated = false, isLStructCreated=false;
+
         public frmMain()
         {
             InitializeComponent();
@@ -36,7 +38,7 @@ namespace XMLtoAccess
         private void initData()
         {
             tableListH =new List<string>(new string[]{ "ZGLV","SCHET","ZAP","PACIENT","SLUCH","HMP","NAPR_FROM","CONS",
-                "ONK_SL","B_DIAG","B_PROT","ONK_USL","LEK_PR","USL","SL_KOEF"});
+                "ONK_SL","B_DIAG","B_PROT","ONK_USL","LEK_PR","USL","KSG_KPG","SL_KOEF"});
             tableListL = new List<string>(new string[] { "PERS"});
 
             addFieldsH.Add("ZGLV", new List<string>(new string[] { "H","FILENAME1"}));
@@ -54,6 +56,7 @@ namespace XMLtoAccess
             addFieldsH.Add("LEK_PR", new List<string>(new string[] { "IDCASE","USL_TIP","DATE_INJ" }));
             addFieldsH.Add("USL", new List<string>(new string[] { "N_ZAP", "IDCASE","PLAT"}));
             addFieldsH.Add("SL_KOEF", new List<string>(new string[] {"IDCASE" }));
+            addFieldsH.Add("KSG_KPG", new List<string>(new string[] { "IDCASE" }));
 
             addFieldsL.Add("PERS", new List<string>(new string[] { "PLAT" }));
         }
@@ -126,7 +129,7 @@ namespace XMLtoAccess
             string res = "";
             string dt = DateTime.Now.ToString("yyyyMMdd");
             string tm = DateTime.Now.ToString("HHmm");
-            res = $"RokbSamson_{dt}tm{tm}_fXML_in97.mdb";
+            res = $"RokbSamson_{dt}tm{tm}_fXML_in2002.mdb";
             return res;
         }
         private void checkPath(string strPath)
@@ -176,6 +179,15 @@ namespace XMLtoAccess
                 txtLog.AppendLine($@"База данных создана, расположение {txtPathToDB.Text}{dbName}");
             }
             txtLog.AppendLine("Чтение XML файлов");
+            //isHStructCreated = false;
+            //isLStructCreated = false;
+            if (!createSchema())
+            {
+                string strMes = "Ошибка создания схемы";
+                txtLog.AppendLine(strMes);
+                MessageBox.Show(strMes);
+                return;
+            }
             readXMLFiles();
         }
 
@@ -188,7 +200,16 @@ namespace XMLtoAccess
                 String dir = Path.GetDirectoryName(txtPathToArc.Text);
                 String unzippath = dir + @"\unarc\";
                 checkPath(unzippath);
+
                 ZipFile.ExtractToDirectory(txtPathToArc.Text, unzippath);
+                string[] files = Directory.GetFiles(unzippath, "56101*.zip");
+                if (files.Count() > 0)
+                {
+                    foreach (string fl in files)
+                    {
+                        ZipFile.ExtractToDirectory(fl, unzippath);
+                    }
+                }
                 isres = true;
             }
             catch(Exception ex)
@@ -197,13 +218,6 @@ namespace XMLtoAccess
             }
 
             return isres;
-            //string startPath = @".\start";
-            //string zipPath = @".\result.zip";
-            //string extractPath = @".\extract";
-
-            //ZipFile.CreateFromDirectory(startPath, zipPath);
-
-            //ZipFile.ExtractToDirectory(zipPath, extractPath);
         }
 
         private bool readXMLFiles()
@@ -214,7 +228,9 @@ namespace XMLtoAccess
             {
                 txtLog.AppendLine(DateTime.Now.ToString());
                 DirectoryInfo dir = new DirectoryInfo($@"{Path.GetDirectoryName(txtPathToArc.Text)}\unarc");
-                FileInfo[] files = dir.GetFiles();
+                
+                
+                FileInfo[] files = dir.GetFiles("*.xml");
                 if (files.Length == 0)
                 {
                     strMsg = "Файлы для обработки отсутствуют";
@@ -249,6 +265,139 @@ namespace XMLtoAccess
             return isres;
         }
 
+        private bool createSchema()
+        {
+            bool result = false;
+            string strMsg = "";
+            OleDbConnection conn;
+            ADODB.Connection adodbCon = new ADODB.Connection();
+            adodbCon.ConnectionString = connString;
+            ADOX.Catalog cat = new ADOX.Catalog();
+            ADOX.Table tab;
+            try
+            {
+                DirectoryInfo dir = new DirectoryInfo($@"{Path.GetDirectoryName(txtPathToArc.Text)}\unarc");
+                FileInfo[] filesH = dir.GetFiles("H*.xml");
+                if (filesH.Length == 0)
+                {
+                    strMsg = "Файлы для обработки отсутствуют";
+                    MessageBox.Show(strMsg);
+                    txtLog.AppendLine(strMsg);
+                    return result;
+                }
+
+                foreach (FileInfo fi in filesH)
+                {
+                    DataSet ds = new DataSet();
+                    ds.ReadXmlSchema(fi.FullName);
+                    foreach (string tableName in tableListH)
+                    {
+                        if (ds.Tables.Contains(tableName))
+                        {
+                            DataTable dt = ds.Tables[tableName];
+                            foreach (DataColumn dc in dt.Columns)
+                            {
+                                if (!addFieldsH[tableName].Contains(dc.ColumnName))
+                                {
+                                    addFieldsH[tableName].Add(dc.ColumnName);
+                                }
+                            }
+                        }
+                        
+                    }
+                }
+
+                adodbCon.Open();
+                cat.ActiveConnection = adodbCon;
+                conn = new OleDbConnection(connString);
+
+                if (conn.State == ConnectionState.Closed) { conn.Open(); }
+
+                txtLog.AppendLine("Создание структуры БД");
+                Application.DoEvents();
+
+                string postFix = "";
+                if (rbTypeTo.Checked) { postFix = "rokb"; }
+                foreach (string tabName in tableListH)
+                {
+                    tab = new ADOX.Table();
+                    tab.Name = $"{tabName}{postFix}";
+                    //id
+                    ADOX.Column column = new ADOX.Column();
+                    column.Name = "id";
+                    column.Type = ADOX.DataTypeEnum.adInteger;
+                    column.ParentCatalog = cat;
+                    column.Properties["AutoIncrement"].Value = true;
+                    tab.Columns.Append(column);
+
+                    foreach (string str in addFieldsH[tabName])
+                    {
+                        tab.Columns.Append(defCol(str));
+                    }
+                    cat.Tables.Append(tab);
+                }
+
+                //L
+                FileInfo[] filesL = dir.GetFiles("L*.xml");
+                if (filesL.Length == 0)
+                {
+                    strMsg = "Файлы для обработки отсутствуют";
+                    MessageBox.Show(strMsg);
+                    txtLog.AppendLine(strMsg);
+                    return result;
+                }
+
+                foreach (FileInfo fi in filesL)
+                {
+                    DataSet ds = new DataSet();
+                    ds.ReadXmlSchema(fi.FullName);
+                    foreach (string tableName in tableListL)
+                    {
+                        if (ds.Tables.Contains(tableName))
+                        {
+                            DataTable dt = ds.Tables[tableName];
+                            foreach (DataColumn dc in dt.Columns)
+                            {
+                                if (!addFieldsL[tableName].Contains(dc.ColumnName))
+                                {
+                                    addFieldsL[tableName].Add(dc.ColumnName);
+                                }
+                            }
+                        }
+
+                    }
+                }
+
+                foreach (string tabName in tableListL)
+                {
+                    tab = new ADOX.Table();
+                    tab.Name = $"{tabName}rokb";
+                    //id
+                    ADOX.Column column = new ADOX.Column();
+                    column.Name = "id";
+                    column.Type = ADOX.DataTypeEnum.adInteger;
+                    column.ParentCatalog = cat;
+                    column.Properties["AutoIncrement"].Value = true;
+                    tab.Columns.Append(column);
+
+                    foreach (string str in addFieldsL[tabName])
+                    {
+                        tab.Columns.Append(defCol(str));
+                    }
+                    cat.Tables.Append(tab);
+                }
+                if (conn.State == ConnectionState.Open) { conn.Close(); }
+                strMsg = "Структура БД создана";
+                txtLog.AppendLine(strMsg);
+                result = true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+            return result;
+        }
+
         public bool ImportFilesToDatabase(FileInfo fi)
         {
             bool result = false;
@@ -259,11 +408,14 @@ namespace XMLtoAccess
                 int indxUnder = fi.Name.IndexOf('_');
                 int indxType = 0;
                 if (fi.Name.Contains("S")) { indxType = fi.Name.IndexOf('S'); }
-                else if (fi.Name.Contains("T")) { indxType = fi.Name.IndexOf('S'); }
+                else if (fi.Name.Contains("T")) { indxType = fi.Name.IndexOf('T'); }
                 else { txtLog.AppendLine($"Не известный тип файла {fi.Name}"); return result; }
-                _PLAT=
+                _PLAT = fi.Name.Substring(indxType+1, indxUnder - indxType-1);
                 DataSet ds = new DataSet();
-                
+                //if (fi.Name == "HM610179S61010_20091.xml")
+                //{
+                //    string ss = "";
+                //}
                 ds.ReadXml(fi.FullName);
 
                 if (!ds.Tables.Contains("ZGLV"))
@@ -306,64 +458,12 @@ namespace XMLtoAccess
             adodbCon.ConnectionString = connString;
             ADOX.Catalog cat = new ADOX.Catalog();
             ADOX.Table tab;
-            int SLUCH_ID = 0;
+            //int SLUCH_ID = 0;
             DAO.DBEngine dbEngine = new DAO.DBEngine();
             try
             {
-                adodbCon.Open();
-                cat.ActiveConnection = adodbCon;
-                conn = new OleDbConnection(connString);
-
-                conn.Open();
-                if (conn.State != ConnectionState.Open)
-                {
-                    strMes = "Отсутствует соединение к БД";
-                    MessageBox.Show(strMes);
-                    txtLog.AppendLine(strMes);
-                    return result;
-                }
-
-                txtLog.AppendLine("Создание структуры БД");
-                Application.DoEvents();
-                
-                foreach (string tabName in tableListH)
-                {
-                    if (!ds.Tables.Contains(tabName))
-                    {
-                        strMes = $"Отсутствует таблица {tabName}";
-                        MessageBox.Show(strMes);
-                        txtLog.AppendLine(strMes);
-                        continue;
-                    }
-
-                    string[] columnNames = ds.Tables[tabName]
-                        .Columns.Cast<DataColumn>()
-                        .Select(x => x.ColumnName)
-                        .ToArray();
-
-                    tab = new ADOX.Table();
-                    tab.Name = $"{tabName}rokb";
-                    //id
-                    ADOX.Column column = new ADOX.Column();
-                    column.Name = "id";
-                    column.Type = ADOX.DataTypeEnum.adInteger;
-                    column.ParentCatalog = cat;
-                    column.Properties["AutoIncrement"].Value = true;
-                    tab.Columns.Append(column);
-
-                    foreach(string str in addFieldsH[tabName])
-                    {
-                        tab.Columns.Append(defCol(str));
-                    }
-                    foreach(string str in columnNames)
-                    {
-                        tab.Columns.Append(defCol(str));
-                    }
-                    cat.Tables.Append(tab);
-                }
-
-                conn.Close();
-
+                string postFix = "";
+                if (rbTypeTo.Checked) { postFix = "rokb"; }
                 txtLog.AppendLine("Внесение данных");
                 Application.DoEvents();
                 //внесение данных
@@ -371,7 +471,7 @@ namespace XMLtoAccess
                 txtLog.AppendLine("Таблица ZGLV");
                 Application.DoEvents();
                 DAO.Database db = dbEngine.OpenDatabase(pathToDb);
-                DAO.Recordset rs = db.OpenRecordset("ZGLVrokb");
+                DAO.Recordset rs = db.OpenRecordset($"ZGLV{postFix}");
                 foreach (DataRow dr in ds.Tables["ZGLV"].Rows)
                 {
                     rs.AddNew();
@@ -388,7 +488,7 @@ namespace XMLtoAccess
                 //
                 txtLog.AppendLine("Таблица SCHET");
                 Application.DoEvents();
-                rs = db.OpenRecordset("SCHETrokb");
+                rs = db.OpenRecordset($"SCHET{postFix}");
                 DataRow drSchet = ds.Tables["SCHET"].Rows[0];
                 _CODE = drSchet["CODE"].ToString();
                 _NSCHET = drSchet["NSCHET"].ToString();
@@ -408,7 +508,7 @@ namespace XMLtoAccess
                 pb.Maximum = ds.Tables["ZAP"].Rows.Count;
                 pb.Value = 0;
                 int counter = 0;
-                rs = db.OpenRecordset("ZAProkb");
+                rs = db.OpenRecordset($"ZAP{postFix}");
                 foreach (DataRow dr in ds.Tables["ZAP"].Rows)
                 {
                     pb.Value = counter++;
@@ -427,33 +527,37 @@ namespace XMLtoAccess
                     //
                     //PACIENT
                     //
-                    DAO.Recordset rsPacient = db.OpenRecordset("PACIENTrokb");
-                    List<DataRow> pacList = ds.Tables["PACIENT"].AsEnumerable().Where(m => m.Field<Int32>("ZAP_Id") == ZAP_Id).ToList<DataRow>();
-                    foreach (DataRow drPac in pacList)
+                    DAO.Recordset rsPacient = db.OpenRecordset($"PACIENT{postFix}");
+                    if (ds.Tables.Contains("PACIENT"))
                     {
-                        rsPacient.AddNew();
-                        rsPacient.Fields["N_ZAP"].Value = _N_ZAP;
-                        rsPacient.Fields["PLAT"].Value = _PLAT;
-                        foreach (DataColumn dc in ds.Tables["PACIENT"].Columns)
+                        List<DataRow> pacList = ds.Tables["PACIENT"].AsEnumerable().Where(m => m.Field<Int32>("ZAP_Id") == ZAP_Id).ToList<DataRow>();
+                        foreach (DataRow drPac in pacList)
                         {
-                            rsPacient.Fields[dc.ColumnName].Value = drPac[dc.Ordinal].ToString();
+                            rsPacient.AddNew();
+                            rsPacient.Fields["N_ZAP"].Value = _N_ZAP;
+                            rsPacient.Fields["PLAT"].Value = _PLAT;
+                            foreach (DataColumn dc in ds.Tables["PACIENT"].Columns)
+                            {
+                                rsPacient.Fields[dc.ColumnName].Value = drPac[dc.Ordinal].ToString();
+                            }
+                            rsPacient.Update();
                         }
-                        rsPacient.Update();
+                        rsPacient.Close();
                     }
-                    rsPacient.Close();
                     //
                     //SLUCH
                     //
-                    DAO.Recordset rsSLUCH = db.OpenRecordset("SLUCHrokb");
+                    if (!ds.Tables.Contains("SLUCH")) { continue; }
+                    DAO.Recordset rsSLUCH = db.OpenRecordset($"SLUCH{postFix}");
                     List<DataRow> sluchList = ds.Tables["SLUCH"].AsEnumerable().Where(m => m.Field<Int32>("ZAP_Id") == ZAP_Id).ToList<DataRow>();
                     foreach (DataRow drSluch in sluchList)
                     {
                         _IDCASE = drSluch[ds.Tables["SLUCH"].Columns["IDCASE"].Ordinal].ToString();
-                        SLUCH_ID = int.Parse(drSluch["SLUCH_Id"].ToString());
-                        if (SLUCH_ID == 1098)
-                        {
-                            int zz = 0;
-                        }
+                        //SLUCH_ID = int.Parse(drSluch["SLUCH_Id"].ToString());
+                        //if (SLUCH_ID == 1098)
+                        //{
+                        //    int zz = 0;
+                        //}
                         int SLUCH_Id = int.Parse(drSluch[ds.Tables["SLUCH"].Columns["SLUCH_Id"].Ordinal].ToString());
                         rsSLUCH.AddNew();
                         rsSLUCH.Fields["N_ZAP"].Value = _N_ZAP;
@@ -466,202 +570,249 @@ namespace XMLtoAccess
                         //
                         //HMP
                         //
-                        DAO.Recordset rsHMP = db.OpenRecordset("HMProkb");
-                        List<DataRow> hmpList = ds.Tables["HMP"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
-                        if (hmpList != null && hmpList.Count > 0)
+                        if (ds.Tables.Contains("HMP"))
                         {
-                            foreach (DataRow drHMP in hmpList)
+                            DAO.Recordset rsHMP = db.OpenRecordset($"HMP{postFix}");
+                            List<DataRow> hmpList = ds.Tables["HMP"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
+                            if (hmpList != null && hmpList.Count > 0)
                             {
-                                rsHMP.AddNew();
-                                rsHMP.Fields["IDCASE"].Value = _IDCASE;
-                                foreach (DataColumn dc in ds.Tables["HMP"].Columns)
+                                foreach (DataRow drHMP in hmpList)
                                 {
-                                    rsHMP.Fields[dc.ColumnName].Value = drHMP[dc.Ordinal].ToString();
+                                    rsHMP.AddNew();
+                                    rsHMP.Fields["IDCASE"].Value = _IDCASE;
+                                    foreach (DataColumn dc in ds.Tables["HMP"].Columns)
+                                    {
+                                        rsHMP.Fields[dc.ColumnName].Value = drHMP[dc.Ordinal].ToString();
+                                    }
+                                    rsHMP.Update();
                                 }
-                                rsHMP.Update();
                             }
+                            rsHMP.Close();
                         }
-                        rsHMP.Close();
                         //
                         //NAPR_FROM
                         //
-                        DAO.Recordset rsNaprFrom = db.OpenRecordset("NAPR_FROMrokb");
-                        List<DataRow> naprFromList = ds.Tables["NAPR_FROM"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
-                        if (naprFromList != null && naprFromList.Count > 0)
+                        if (ds.Tables.Contains("NAPR_FROM"))
                         {
-                            foreach (DataRow drNaprFrom in naprFromList)
+                            DAO.Recordset rsNaprFrom = db.OpenRecordset($"NAPR_FROM{postFix}");
+                            List<DataRow> naprFromList = ds.Tables["NAPR_FROM"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
+                            if (naprFromList != null && naprFromList.Count > 0)
                             {
-                                rsNaprFrom.AddNew();
-                                rsNaprFrom.Fields["IDCASE"].Value = _IDCASE;
-                                foreach (DataColumn dc in ds.Tables["NAPR_FROM"].Columns)
+                                foreach (DataRow drNaprFrom in naprFromList)
                                 {
-                                    rsNaprFrom.Fields[dc.ColumnName].Value = drNaprFrom[dc.Ordinal].ToString();
+                                    rsNaprFrom.AddNew();
+                                    rsNaprFrom.Fields["IDCASE"].Value = _IDCASE;
+                                    foreach (DataColumn dc in ds.Tables["NAPR_FROM"].Columns)
+                                    {
+                                        rsNaprFrom.Fields[dc.ColumnName].Value = drNaprFrom[dc.Ordinal].ToString();
+                                    }
+                                    rsNaprFrom.Update();
                                 }
-                                rsNaprFrom.Update();
                             }
+                            rsNaprFrom.Close();
                         }
-                        rsNaprFrom.Close();
                         //
                         //CONS
                         //
-                        DAO.Recordset rsCons = db.OpenRecordset("CONSrokb");
-                        List<DataRow> consList = ds.Tables["CONS"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
-                        if (consList != null && consList.Count > 0)
+                        if (ds.Tables.Contains("CONS"))
                         {
-                            foreach (DataRow drCons in consList)
+                            DAO.Recordset rsCons = db.OpenRecordset($"CONS{postFix}");
+                            List<DataRow> consList = ds.Tables["CONS"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
+                            if (consList != null && consList.Count > 0)
                             {
-                                rsCons.AddNew();
-                                rsCons.Fields["IDCASE"].Value = _IDCASE;
-                                foreach (DataColumn dc in ds.Tables["CONS"].Columns)
+                                foreach (DataRow drCons in consList)
                                 {
-                                    rsCons.Fields[dc.ColumnName].Value = drCons[dc.Ordinal].ToString();
+                                    rsCons.AddNew();
+                                    rsCons.Fields["IDCASE"].Value = _IDCASE;
+                                    foreach (DataColumn dc in ds.Tables["CONS"].Columns)
+                                    {
+                                        rsCons.Fields[dc.ColumnName].Value = drCons[dc.Ordinal].ToString();
+                                    }
+                                    rsCons.Update();
                                 }
-                                rsCons.Update();
                             }
+                            rsCons.Close();
                         }
-                        rsCons.Close();
                         //
                         //ONK_SL
                         //
-                        DAO.Recordset rsOnkSl = db.OpenRecordset("ONK_SLrokb");
-                        List<DataRow> onkSlList = ds.Tables["ONK_SL"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
-                        if (onkSlList != null && onkSlList.Count > 0)
+                        if (ds.Tables.Contains("ONK_SL"))
                         {
-                            foreach (DataRow drOnkSl in onkSlList)
+                            DAO.Recordset rsOnkSl = db.OpenRecordset($"ONK_SL{postFix}");
+                            List<DataRow> onkSlList = ds.Tables["ONK_SL"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
+                            if (onkSlList != null && onkSlList.Count > 0)
                             {
-                                int OnkSl_Id = int.Parse(drOnkSl[ds.Tables["ONK_SL"].Columns["ONK_SL_Id"].Ordinal].ToString());
-                                rsOnkSl.AddNew();
-                                rsOnkSl.Fields["IDCASE"].Value = _IDCASE;
-                                foreach (DataColumn dc in ds.Tables["ONK_SL"].Columns)
+                                foreach (DataRow drOnkSl in onkSlList)
                                 {
-                                    rsOnkSl.Fields[dc.ColumnName].Value = drOnkSl[dc.Ordinal].ToString();
-                                }
-                                rsOnkSl.Update();
-                                //
-                                //B_DIAG
-                                //
-                                DAO.Recordset rsBDiag = db.OpenRecordset("B_DIAGrokb");
-                                List<DataRow> bDiagList = ds.Tables["B_DIAG"].AsEnumerable().Where(m => m.Field<Int32>("ONK_SL_Id") == OnkSl_Id).ToList<DataRow>();
-                                if (bDiagList != null && bDiagList.Count > 0)
-                                {
-                                    foreach (DataRow drBDiag in bDiagList)
+                                    int OnkSl_Id = int.Parse(drOnkSl[ds.Tables["ONK_SL"].Columns["ONK_SL_Id"].Ordinal].ToString());
+                                    rsOnkSl.AddNew();
+                                    rsOnkSl.Fields["IDCASE"].Value = _IDCASE;
+                                    foreach (DataColumn dc in ds.Tables["ONK_SL"].Columns)
                                     {
-                                        rsBDiag.AddNew();
-                                        rsBDiag.Fields["IDCASE"].Value = _IDCASE;
-                                        foreach (DataColumn dc in ds.Tables["B_DIAG"].Columns)
-                                        {
-                                            rsBDiag.Fields[dc.ColumnName].Value = drBDiag[dc.Ordinal].ToString();
-                                        }
-                                        rsBDiag.Update();
+                                        rsOnkSl.Fields[dc.ColumnName].Value = drOnkSl[dc.Ordinal].ToString();
                                     }
-                                }
-                                rsBDiag.Close();
-                                //
-                                //ONK_USL
-                                //
-                                DAO.Recordset rsOnkUsl = db.OpenRecordset("ONK_USLrokb");
-                                List<DataRow> onkUslList = ds.Tables["ONK_USL"].AsEnumerable().Where(m => m.Field<Int32>("ONK_SL_Id") == OnkSl_Id).ToList<DataRow>();
-                                if (onkUslList != null && onkUslList.Count > 0)
-                                {
-                                    foreach (DataRow drOnkUsl in onkUslList)
+                                    rsOnkSl.Update();
+                                    //
+                                    //B_DIAG
+                                    //
+                                    if (ds.Tables.Contains("B_DIAG"))
                                     {
-                                        rsOnkUsl.AddNew();
-                                        rsOnkUsl.Fields["IDCASE"].Value = _IDCASE;
-                                        int ONK_USL_Id = int.Parse(drOnkUsl["ONK_USL_Id"].ToString());
-                                        foreach (DataColumn dc in ds.Tables["ONK_USL"].Columns)
+                                        DAO.Recordset rsBDiag = db.OpenRecordset($"B_DIAG{postFix}");
+                                        List<DataRow> bDiagList = ds.Tables["B_DIAG"].AsEnumerable().Where(m => m.Field<Int32>("ONK_SL_Id") == OnkSl_Id).ToList<DataRow>();
+                                        if (bDiagList != null && bDiagList.Count > 0)
                                         {
-                                            rsOnkUsl.Fields[dc.ColumnName].Value = drOnkUsl[dc.Ordinal].ToString();
-                                        }
-                                        rsOnkUsl.Update();
-                                        //
-                                        //LEK_PR
-                                        //
-                                        DAO.Recordset rsLekPr = db.OpenRecordset("LEK_PRrokb");
-                                        List<DataRow> lekPrList = ds.Tables["LEK_PR"].AsEnumerable().Where(m => m.Field<Int32>("ONK_USL_Id") == ONK_USL_Id).ToList<DataRow>();
-                                        if (lekPrList != null && lekPrList.Count > 0)
-                                        {
-                                            foreach (DataRow drLekPr in lekPrList)
+                                            foreach (DataRow drBDiag in bDiagList)
                                             {
-                                                int LEK_PR_Id = int.Parse(drLekPr["LEK_PR_Id"].ToString());
-                                                List<DataRow> dateInjList = ds.Tables["DATE_INJ"].AsEnumerable().Where(m => m.Field<Int32>("LEK_PR_Id") == LEK_PR_Id).ToList<DataRow>();
-                                                if (dateInjList != null && dateInjList.Count > 0)
+                                                rsBDiag.AddNew();
+                                                rsBDiag.Fields["IDCASE"].Value = _IDCASE;
+                                                foreach (DataColumn dc in ds.Tables["B_DIAG"].Columns)
                                                 {
-                                                    foreach (DataRow drDateInj in dateInjList)
-                                                    {
-                                                        rsLekPr.AddNew();
-                                                        foreach (DataColumn dc in ds.Tables["LEK_PR"].Columns)
-                                                        {
-                                                            rsLekPr.Fields[dc.ColumnName].Value = drLekPr[dc.Ordinal].ToString();
-                                                        }
-                                                        rsLekPr.Fields["IDCASE"].Value = _IDCASE;
-                                                        rsLekPr.Fields["USL_TIP"].Value = "2";
-                                                        rsLekPr.Fields["DATE_INJ"].Value = drDateInj["DATE_INJ_Text"].ToString();
-                                                        rsLekPr.Update();
-                                                    }
+                                                    rsBDiag.Fields[dc.ColumnName].Value = drBDiag[dc.Ordinal].ToString();
                                                 }
-                                                else
+                                                rsBDiag.Update();
+                                            }
+                                        }
+                                        rsBDiag.Close();
+                                    }
+                                    //
+                                    //ONK_USL
+                                    //
+                                    if (ds.Tables.Contains("ONK_USL"))
+                                    {
+                                        DAO.Recordset rsOnkUsl = db.OpenRecordset($"ONK_USL{postFix}");
+                                        List<DataRow> onkUslList = ds.Tables["ONK_USL"].AsEnumerable().Where(m => m.Field<Int32>("ONK_SL_Id") == OnkSl_Id).ToList<DataRow>();
+                                        if (onkUslList != null && onkUslList.Count > 0)
+                                        {
+                                            foreach (DataRow drOnkUsl in onkUslList)
+                                            {
+                                                rsOnkUsl.AddNew();
+                                                rsOnkUsl.Fields["IDCASE"].Value = _IDCASE;
+                                                int ONK_USL_Id = int.Parse(drOnkUsl["ONK_USL_Id"].ToString());
+                                                foreach (DataColumn dc in ds.Tables["ONK_USL"].Columns)
                                                 {
-                                                    rsLekPr.AddNew();
-                                                    rsLekPr.Fields["IDCASE"].Value = _IDCASE;
-                                                    rsLekPr.Fields["USL_TIP"].Value = "2";
-                                                    rsLekPr.Update();
+                                                    rsOnkUsl.Fields[dc.ColumnName].Value = drOnkUsl[dc.Ordinal].ToString();
+                                                }
+                                                rsOnkUsl.Update();
+                                                //
+                                                //LEK_PR
+                                                //
+                                                if (ds.Tables.Contains("LEK_PR"))
+                                                {
+                                                    DAO.Recordset rsLekPr = db.OpenRecordset($"LEK_PR{postFix}");
+                                                    List<DataRow> lekPrList = ds.Tables["LEK_PR"].AsEnumerable().Where(m => m.Field<Int32>("ONK_USL_Id") == ONK_USL_Id).ToList<DataRow>();
+                                                    if (lekPrList != null && lekPrList.Count > 0)
+                                                    {
+                                                        foreach (DataRow drLekPr in lekPrList)
+                                                        {
+                                                            int LEK_PR_Id = int.Parse(drLekPr["LEK_PR_Id"].ToString());
+                                                            List<DataRow> dateInjList = ds.Tables["DATE_INJ"].AsEnumerable().Where(m => m.Field<Int32>("LEK_PR_Id") == LEK_PR_Id).ToList<DataRow>();
+                                                            if (dateInjList != null && dateInjList.Count > 0)
+                                                            {
+                                                                foreach (DataRow drDateInj in dateInjList)
+                                                                {
+                                                                    rsLekPr.AddNew();
+                                                                    foreach (DataColumn dc in ds.Tables["LEK_PR"].Columns)
+                                                                    {
+                                                                        rsLekPr.Fields[dc.ColumnName].Value = drLekPr[dc.Ordinal].ToString();
+                                                                    }
+                                                                    rsLekPr.Fields["IDCASE"].Value = _IDCASE;
+                                                                    rsLekPr.Fields["USL_TIP"].Value = "2";
+                                                                    rsLekPr.Fields["DATE_INJ"].Value = drDateInj["DATE_INJ_Text"].ToString();
+                                                                    rsLekPr.Update();
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                rsLekPr.AddNew();
+                                                                rsLekPr.Fields["IDCASE"].Value = _IDCASE;
+                                                                rsLekPr.Fields["USL_TIP"].Value = "2";
+                                                                rsLekPr.Update();
+                                                            }
+                                                        }
+                                                    }
+                                                    rsLekPr.Close();
                                                 }
                                             }
                                         }
-                                        rsLekPr.Close();
+                                        rsOnkUsl.Close();
                                     }
                                 }
-                                rsOnkUsl.Close();
                             }
+                            rsOnkSl.Close();
                         }
-                        rsOnkSl.Close();
                         //
                         //USL
                         //
-                        DAO.Recordset rsUSL = db.OpenRecordset("USLrokb");
-                        List<DataRow> uslList = ds.Tables["USL"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
-                        if (uslList != null && uslList.Count > 0)
+                        if (ds.Tables.Contains("USL"))
                         {
-                            foreach (DataRow drUSL in uslList)
+                            DAO.Recordset rsUSL = db.OpenRecordset($"USL{postFix}");
+                            List<DataRow> uslList = ds.Tables["USL"].AsEnumerable().Where(m => m.Field<Int32>("SLUCH_Id") == SLUCH_Id).ToList<DataRow>();
+                            if (uslList != null && uslList.Count > 0)
                             {
-                                int USL_Id = int.Parse(drUSL["USL_Id"].ToString());
-                                rsUSL.AddNew();
-                                rsUSL.Fields["IDCASE"].Value = _IDCASE;
-                                rsUSL.Fields["N_ZAP"].Value = _N_ZAP;
-                                rsUSL.Fields["PLAT"].Value = _PLAT;
-                                foreach (DataColumn dc in ds.Tables["USL"].Columns)
+                                foreach (DataRow drUSL in uslList)
                                 {
-                                    rsUSL.Fields[dc.ColumnName].Value = drUSL[dc.Ordinal].ToString();
-                                }
-                                rsUSL.Update();
-                                //
-                                //SL_KOEF
-                                //
-                                DAO.Recordset rsSlKoef = db.OpenRecordset("SL_KOEFrokb");
-                                List<DataRow> slKoefList = ds.Tables["SL_KOEF"].AsEnumerable().Where(m => m.Field<Int32>("USL_Id") == USL_Id).ToList<DataRow>();
-                                if (slKoefList != null && slKoefList.Count > 0)
-                                {
-                                    foreach (DataRow drSlKoef in slKoefList)
+                                    int USL_Id = int.Parse(drUSL["USL_Id"].ToString());
+                                    rsUSL.AddNew();
+                                    rsUSL.Fields["IDCASE"].Value = _IDCASE;
+                                    rsUSL.Fields["N_ZAP"].Value = _N_ZAP;
+                                    rsUSL.Fields["PLAT"].Value = _PLAT;
+                                    foreach (DataColumn dc in ds.Tables["USL"].Columns)
                                     {
-                                        rsSlKoef.AddNew();
-                                        rsSlKoef.Fields["IDCASE"].Value = _IDCASE;
-                                        foreach (DataColumn dc in ds.Tables["SL_KOEF"].Columns)
+                                        rsUSL.Fields[dc.ColumnName].Value = drUSL[dc.Ordinal].ToString();
+                                    }
+                                    rsUSL.Update();
+                                    //
+                                    //SL_KOEF
+                                    //
+                                    if (ds.Tables.Contains("SL_KOEF"))
+                                    {
+                                        DAO.Recordset rsSlKoef = db.OpenRecordset($"SL_KOEF{postFix}");
+                                        List<DataRow> slKoefList = ds.Tables["SL_KOEF"].AsEnumerable().Where(m => m.Field<Int32>("USL_Id") == USL_Id).ToList<DataRow>();
+                                        if (slKoefList != null && slKoefList.Count > 0)
                                         {
-                                            rsSlKoef.Fields[dc.ColumnName].Value = drSlKoef[dc.Ordinal].ToString();
+                                            foreach (DataRow drSlKoef in slKoefList)
+                                            {
+                                                rsSlKoef.AddNew();
+                                                rsSlKoef.Fields["IDCASE"].Value = _IDCASE;
+                                                foreach (DataColumn dc in ds.Tables["SL_KOEF"].Columns)
+                                                {
+                                                    rsSlKoef.Fields[dc.ColumnName].Value = drSlKoef[dc.Ordinal].ToString();
+                                                }
+                                                rsSlKoef.Update();
+                                            }
                                         }
-                                        rsSlKoef.Update();
+                                        rsSlKoef.Close();
+                                    }
+                                    //
+                                    //SL_KOEF
+                                    //
+                                    if (ds.Tables.Contains("KSG_KPG"))
+                                    {
+                                        DAO.Recordset rsKSGKPG = db.OpenRecordset($"KSG_KPG{postFix}");
+                                        List<DataRow> KSGKPG = ds.Tables["KSG_KPG"].AsEnumerable().Where(m => m.Field<Int32>("USL_Id") == USL_Id).ToList<DataRow>();
+                                        if (KSGKPG != null && KSGKPG.Count > 0)
+                                        {
+                                            foreach (DataRow drKSGKPG in KSGKPG)
+                                            {
+                                                rsKSGKPG.AddNew();
+                                                rsKSGKPG.Fields["IDCASE"].Value = _IDCASE;
+                                                foreach (DataColumn dc in ds.Tables["KSG_KPG"].Columns)
+                                                {
+                                                    rsKSGKPG.Fields[dc.ColumnName].Value = drKSGKPG[dc.Ordinal].ToString();
+                                                }
+                                                rsKSGKPG.Update();
+                                            }
+                                        }
+                                        rsKSGKPG.Close();
                                     }
                                 }
-                                rsSlKoef.Close();
                             }
+                            rsUSL.Close();
                         }
-                        rsUSL.Close();
                     }
                     rsSLUCH.Close();
-
                 }
                 rs.Close();
-
             }
             catch(Exception ex)
             {
@@ -690,66 +841,13 @@ namespace XMLtoAccess
             
             try
             {
-
-                adodbCon.Open();
-                cat.ActiveConnection = adodbCon;
-                conn = new OleDbConnection(connString);
-
-                conn.Open();
-                if (conn.State != ConnectionState.Open)
-                {
-                    strMes = "Отсутствует соединение к БД";
-                    MessageBox.Show(strMes);
-                    txtLog.AppendLine(strMes);
-                    return result;
-                }
-                txtLog.AppendLine("Создание структуры БД");
-                Application.DoEvents();
-                foreach (string tabName in tableListL)
-                {
-                    if (!ds.Tables.Contains(tabName))
-                    {
-                        strMes = $"Отсутствует таблица {tabName}";
-                        MessageBox.Show(strMes);
-                        txtLog.AppendLine(strMes);
-                        continue;
-                    }
-
-                    string[] columnNames = ds.Tables[tabName]
-                        .Columns.Cast<DataColumn>()
-                        .Select(x => x.ColumnName)
-                        .ToArray();
-
-                    tab = new ADOX.Table();
-                    tab.Name = $"{tabName}rokb";
-                    //id
-                    ADOX.Column column = new ADOX.Column();
-                    column.Name = "id";
-                    column.Type = ADOX.DataTypeEnum.adInteger;
-                    column.ParentCatalog = cat;
-                    column.Properties["AutoIncrement"].Value = true;
-                    tab.Columns.Append(column);
-
-                    foreach (string str in addFieldsL[tabName])
-                    {
-                        tab.Columns.Append(defCol(str));
-                    }
-                    foreach (string str in columnNames)
-                    {
-                        tab.Columns.Append(defCol(str));
-                    }
-                    cat.Tables.Append(tab);
-                }
-
-                conn.Close();
-
-
                 //внесение данных
-                string _PLAT = "61";
                 txtLog.AppendLine("Внесение данных");
                 Application.DoEvents();
+                string postFix = "";
+                if (rbTypeTo.Checked) { postFix = "rokb"; }
                 DAO.Database db = dbEngine.OpenDatabase(pathToDb);
-                DAO.Recordset rs = db.OpenRecordset("ZGLVrokb");
+                DAO.Recordset rs = db.OpenRecordset($"ZGLV{postFix}");
                 foreach (DataRow dr in ds.Tables["ZGLV"].Rows)
                 {
                     rs.AddNew();
@@ -764,28 +862,31 @@ namespace XMLtoAccess
                 //
                 //PERS
                 //
-                txtLog.AppendLine("Таблица PERS");
-                Application.DoEvents();
-                System.Threading.Thread.Sleep(10000);
-                pb.Minimum = 0;
-                pb.Maximum = ds.Tables["PERS"].Rows.Count;
-                pb.Value = 0;
-                Application.DoEvents();
-                rs = db.OpenRecordset("PERSrokb");
-                int counter = 0;
-                foreach (DataRow drSchet in ds.Tables["PERS"].Rows)
+                if (ds.Tables.Contains("PERS"))
                 {
-                    pb.Value = counter++;
+                    txtLog.AppendLine("Таблица PERS");
                     Application.DoEvents();
-                    rs.AddNew();
-                    rs.Fields["PLAT"].Value = _PLAT;
-                    foreach (DataColumn dc in ds.Tables["PERS"].Columns)
+                    System.Threading.Thread.Sleep(10000);
+                    pb.Minimum = 0;
+                    pb.Maximum = ds.Tables["PERS"].Rows.Count;
+                    pb.Value = 0;
+                    Application.DoEvents();
+                    rs = db.OpenRecordset($"PERS{postFix}");
+                    int counter = 0;
+                    foreach (DataRow drSchet in ds.Tables["PERS"].Rows)
                     {
-                        rs.Fields[dc.ColumnName].Value = drSchet[dc.ColumnName].ToString();
+                        pb.Value = counter++;
+                        Application.DoEvents();
+                        rs.AddNew();
+                        rs.Fields["PLAT"].Value = _PLAT;
+                        foreach (DataColumn dc in ds.Tables["PERS"].Columns)
+                        {
+                            rs.Fields[dc.ColumnName].Value = drSchet[dc.ColumnName].ToString();
+                        }
+                        rs.Update();
                     }
-                    rs.Update();
+                    rs.Close();
                 }
-                rs.Close();
             }
             catch (Exception ex)
             {
